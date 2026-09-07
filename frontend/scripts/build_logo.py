@@ -1,4 +1,4 @@
-"""Rebuild public/logo.png from the original seal in brand/.
+"""Rebuild public/logo.png and the favicons from the original seal in brand/.
 
 The source is a photo/scan, so it is cleaned to a true navy-on-white ramp:
 that removes JPEG noise, sharpens the edges, and cuts the file size by more
@@ -17,6 +17,9 @@ OUT = ROOT / "public" / "logo.png"
 SIZE = 800  # keep in step with LOGO_WIDTH/LOGO_HEIGHT in src/lib/config.ts
 NAVY = (31, 42, 107)
 WHITE = (255, 255, 255)
+ICON_DIR = ROOT / "public"
+# How much of the seal the favicon keeps - just the central crest.
+CREST_FRACTION = 0.30
 
 
 def main():
@@ -36,6 +39,38 @@ def main():
     )
     clean.quantize(colors=32, method=Image.MEDIANCUT).save(OUT, "PNG", optimize=True)
     print(f"wrote {OUT} ({SIZE}x{SIZE}, {OUT.stat().st_size / 1024:.0f} KB)")
+
+    build_favicons(clean)
+
+
+def build_favicons(seal):
+    """Crop to the central shield for the favicon.
+
+    The full seal has ring text that turns to mush at 16px, so the tab icon
+    uses just the crest, with a little white margin so it does not touch the
+    edges of the tab.
+    """
+    w, h = seal.size
+    half = int(w * CREST_FRACTION / 2)
+    crest = seal.crop((w // 2 - half, h // 2 - half, w // 2 + half, h // 2 + half))
+
+    pad = int(crest.width * 0.08)
+    padded = Image.new("RGB", (crest.width + pad * 2, crest.height + pad * 2), WHITE)
+    padded.paste(crest, (pad, pad))
+
+    png32 = ICON_DIR / "favicon-32.png"
+    padded.resize((32, 32), Image.LANCZOS).save(png32, "PNG", optimize=True)
+
+    png180 = ICON_DIR / "apple-touch-icon.png"
+    padded.resize((180, 180), Image.LANCZOS).save(png180, "PNG", optimize=True)
+
+    ico = ICON_DIR / "favicon.ico"
+    padded.resize((64, 64), Image.LANCZOS).save(
+        ico, "ICO", sizes=[(16, 16), (32, 32), (48, 48)]
+    )
+
+    for path in (ico, png32, png180):
+        print(f"wrote {path.name} ({path.stat().st_size / 1024:.1f} KB)")
 
 
 if __name__ == "__main__":

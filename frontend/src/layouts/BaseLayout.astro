@@ -67,8 +67,10 @@ const ogDescription = description.length > 200 ? `${description.slice(0, 197)}..
     <title>{pageTitle}</title>
     <meta name="description" content={ogDescription} />
     <link rel="canonical" href={canonical} />
-    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <link rel="apple-touch-icon" href={LOGO_PATH} />
+    <!-- Tab icon is the seal's crest alone; the full seal is illegible at 16px. -->
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" href="/favicon-32.png" type="image/png" sizes="32x32" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <meta name="theme-color" content="#1f2a6b" />
     {noindex && <meta name="robots" content="noindex, nofollow" />}
 

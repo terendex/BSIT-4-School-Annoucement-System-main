@@ -120,10 +120,14 @@ on empty states, and as the Open Graph fallback image. The original scan lives
 in `frontend/brand/slclogo.jpg` and is *not* deployed.
 
 To swap in a new seal, replace that source file and run
-`python frontend/scripts/build_logo.py`. It cleans the scan to navy-on-white and
-writes an 800×800 PNG. If you change `SIZE` in that script, update `LOGO_WIDTH`
-and `LOGO_HEIGHT` in `src/lib/config.ts` to match — they are sent as
-`og:image:width`/`height`, and Facebook trusts those tags over the real file.
+`python frontend/scripts/build_logo.py`. It cleans the scan to navy-on-white,
+writes an 800×800 `logo.png`, and crops the central crest into the favicons
+(`favicon.ico`, `favicon-32.png`, `apple-touch-icon.png`) — the full seal's ring
+text is unreadable at 16px, so the tab icon uses the shield alone.
+
+If you change `SIZE` in that script, update `LOGO_WIDTH` and `LOGO_HEIGHT` in
+`src/lib/config.ts` to match — they are sent as `og:image:width`/`height`, and
+Facebook trusts those tags over the real file.
 
 ### Every time — start the system
 
@@ -443,7 +447,7 @@ frontend/
       admin/           Modal, LoginModal, AnnouncementModal,
                        AttachmentsModal, ConfirmModal, AdminDashboard
     pages/             index.astro, a/[slug].astro, admin/index.astro, 404.astro
-  public/              logo.png (the seal), favicon.svg, robots.txt
+  public/              logo.png (the seal), favicon.ico/-32/apple-touch, robots.txt
   brand/               slclogo.jpg - original scan, not deployed
-  scripts/             build_logo.py - regenerates public/logo.png
+  scripts/             build_logo.py - regenerates the logo and favicons
 ```
