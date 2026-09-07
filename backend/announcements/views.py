@@ -2,7 +2,7 @@ import logging
 
 from django.contrib.auth import authenticate
 from django.db.models import Max
-from rest_framework import generics, status, viewsets
+from rest_framework import generics, serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAdminUser
 from rest_framework.response import Response
@@ -134,10 +134,18 @@ class FeedStateView(APIView):
             last_modified=Max("updated_at")
         )
         last_modified = aggregate["last_modified"]
+        # Serialize through DRF's field, not .isoformat(): the announcement
+        # serializer renders in the active timezone (+08:00) while a raw
+        # isoformat gives UTC (+00:00). Mismatched strings made the frontend
+        # think the feed had changed on every single poll.
         return Response(
             {
                 "count": Announcement.objects.published().count(),
-                "last_modified": last_modified.isoformat() if last_modified else None,
+                "last_modified": serializers.DateTimeField().to_representation(
+                    last_modified
+                )
+                if last_modified
+                else None,
             }
         )
 

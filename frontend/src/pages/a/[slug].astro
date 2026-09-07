@@ -11,10 +11,11 @@ import { renderMarkdown } from "../../lib/markdown";
 const { slug } = Astro.params;
 const announcement = await getAnnouncement(slug!);
 
-// A real 404 status (not a redirect) so crawlers and Messenger do not cache
-// an unpublished or deleted announcement as a valid page.
+// Render the 404 route in place. A bodyless Response(404) is not enough here:
+// the adapter has nothing to serve and answers 500, which told Messenger the
+// link was broken rather than simply gone.
 if (!announcement) {
-  return new Response(null, { status: 404, statusText: "Not found" });
+  return Astro.rewrite("/404");
 }
 
 const bodyHtml = renderMarkdown(announcement.body);

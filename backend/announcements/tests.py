@@ -69,7 +69,12 @@ class FeedStateTests(TestCase):
         self.assertEqual(response.status_code, 200)
         # Drafts must not leak into the count classmates see.
         self.assertEqual(response.data["count"], 1)
-        self.assertEqual(response.data["last_modified"], a.updated_at.isoformat())
+        # Must match the format the announcement serializer emits, or the
+        # frontend compares "+00:00" against "+08:00" and refreshes forever.
+        listed = self.client.get(reverse("public-announcement-list"))
+        self.assertEqual(
+            response.data["last_modified"], listed.data["results"][0]["updated_at"]
+        )
 
     def test_signature_moves_when_a_post_is_edited(self):
         a = Announcement.objects.create(title="One")

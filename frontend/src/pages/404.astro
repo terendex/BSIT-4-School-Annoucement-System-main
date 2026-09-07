@@ -1,6 +1,9 @@
 ---
 import BaseLayout from "../layouts/BaseLayout.astro";
 import { LOGO_PATH } from "../lib/config";
+
+// Set explicitly so a rewrite from /a/[slug] keeps the 404 status.
+Astro.response.status = 404;
 ---
 
 <BaseLayout

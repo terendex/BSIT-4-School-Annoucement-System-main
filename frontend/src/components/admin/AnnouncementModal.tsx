@@ -10,6 +10,17 @@ import {
 import type { SourcePage } from "../../lib/adminClient";
 import type { Announcement } from "../../lib/types";
 
+/** The post saved but an attachment did not - a different story to a failed save. */
+class PartialSaveError extends Error {
+  announcement: Announcement;
+
+  constructor(message: string, announcement: Announcement) {
+    super(message);
+    this.name = "PartialSaveError";
+    this.announcement = announcement;
+  }
+}
+
 interface Props {
   /** Omit to create a new announcement. */
   announcement?: Announcement | null;
@@ -66,7 +77,19 @@ export default function AnnouncementModal({ announcement, onClose, onSaved }: Pr
       for (const [index, file] of files.entries()) {
         setProgress(`Uploading ${index + 1} of ${files.length}...`);
         const kind = file.type.startsWith("image/") ? "image" : "file";
-        const attachment = await uploadAttachment(saved.id, file, kind);
+        let attachment;
+        try {
+          attachment = await uploadAttachment(saved.id, file, kind);
+        } catch (uploadError) {
+          // The announcement itself already saved. Say so plainly, rather than
+          // showing a bare error next to a post that did in fact publish.
+          const reason = (uploadError as ApiError).message || "upload failed";
+          throw new PartialSaveError(
+            `"${saved.title}" was saved, but ${file.name} could not be uploaded: ` +
+              `${reason} Add it again from the Files dialog.`,
+            saved
+          );
+        }
         saved = {
           ...saved,
           images: kind === "image" ? [...saved.images, attachment] : saved.images,
@@ -79,6 +102,13 @@ export default function AnnouncementModal({ announcement, onClose, onSaved }: Pr
 
       onSaved(saved);
     } catch (err) {
+      if (err instanceof PartialSaveError) {
+        // Keep the dialog open with the explanation, but hand the saved
+        // announcement to the dashboard so the list is not left stale.
+        setError(err.message);
+        onSaved(err.announcement);
+        return;
+      }
       const apiError = err as ApiError;
       setError(apiError.message || "Could not save the announcement.");
       setFieldErrors(apiError.fields ?? {});

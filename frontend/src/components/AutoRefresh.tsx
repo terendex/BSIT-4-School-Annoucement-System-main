@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { API_BASE_URL } from "../lib/config";
 
 interface Props {
@@ -19,105 +19,88 @@ const signatureOf = (data: any, slug?: string): string =>
   slug ? String(data?.updated_at ?? "") : `${data?.count ?? ""}:${data?.last_modified ?? ""}`;
 
 /**
- * Watches for new or edited announcements and offers a refresh.
+ * Keeps the page current without any visible chrome.
  *
- * Deliberately does not reload the page out from under you: the banner waits
- * for a click, and the only automatic reload happens when you return to a tab
- * that has gone stale, which is the moment you expect fresh content anyway.
+ * Renders nothing. When the announcements change it reloads quietly, and only
+ * at a moment where a reload cannot lose anything or interrupt reading:
+ *  - never while a dialog is open or a form has been typed into
+ *  - never while the tab is hidden (polling stops there too, to spare battery
+ *    and mobile data)
+ *  - on a long page, not while scrolled down mid-article
+ * If the moment is wrong it simply waits and checks again.
  */
 export default function AutoRefresh({ initial, slug, intervalSeconds = 60 }: Props) {
-  const [stale, setStale] = useState(false);
-  const [gone, setGone] = useState(false);
   const initialRef = useRef(initial);
 
-  const check = useCallback(async () => {
+  const changed = useCallback(async () => {
     try {
       const response = await fetch(endpointFor(slug), {
         headers: { Accept: "application/json" },
         cache: "no-store",
       });
-      if (response.status === 404 && slug) {
-        // The announcement was unpublished or deleted while open.
-        setGone(true);
-        return false;
-      }
+      // A deleted or unpublished post is a change worth picking up: reloading
+      // lands the reader on the "no longer available" page instead of a stale one.
+      if (response.status === 404 && slug) return true;
       if (!response.ok) return false;
-      const changed = signatureOf(await response.json(), slug) !== initialRef.current;
-      if (changed) setStale(true);
-      return changed;
+      return signatureOf(await response.json(), slug) !== initialRef.current;
     } catch {
-      // Offline or the API is asleep - stay quiet and try again next tick.
+      // Offline, or the API is asleep. Stay quiet and try again next tick.
       return false;
     }
   }, [slug]);
 
   useEffect(() => {
     let timer: number | undefined;
+    let stopped = false;
+
+    const tick = async () => {
+      if (stopped || document.hidden) return;
+      if ((await changed()) && safeToReload()) {
+        window.location.reload();
+        return;
+      }
+      schedule();
+    };
 
     const schedule = () => {
       window.clearTimeout(timer);
-      // Polling a hidden tab wastes battery and mobile data.
-      if (document.hidden) return;
-      timer = window.setTimeout(async () => {
-        await check();
-        schedule();
-      }, Math.max(15, intervalSeconds) * 1000);
+      if (stopped || document.hidden) return;
+      timer = window.setTimeout(tick, Math.max(15, intervalSeconds) * 1000);
     };
 
-    const onVisibility = async () => {
-      if (document.hidden) {
-        window.clearTimeout(timer);
-        return;
-      }
-      // Coming back to the tab is the one safe moment to reload outright.
-      if (await check()) {
-        if (!isBusy()) {
-          window.location.reload();
-          return;
-        }
-      }
-      schedule();
+    const onVisibility = () => {
+      window.clearTimeout(timer);
+      // Returning to the tab is the natural moment to pick up what was missed.
+      if (!document.hidden) void tick();
     };
 
     schedule();
     document.addEventListener("visibilitychange", onVisibility);
     return () => {
+      stopped = true;
       window.clearTimeout(timer);
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [check, intervalSeconds]);
+  }, [changed, intervalSeconds]);
 
-  if (gone) {
-    return (
-      <div className="refresh-bar refresh-bar--gone" role="status">
-        <span>This announcement is no longer available.</span>
-        <a className="btn btn--sm" href="/">
-          All announcements
-        </a>
-      </div>
-    );
-  }
-
-  if (!stale) return null;
-
-  return (
-    <div className="refresh-bar" role="status" aria-live="polite">
-      <span>{slug ? "This announcement was updated." : "New announcements posted."}</span>
-      <button type="button" className="btn btn--sm" onClick={() => window.location.reload()}>
-        Refresh
-      </button>
-    </div>
-  );
+  return null;
 }
 
-/** True while something would be lost by reloading - an open dialog or a filled field. */
-function isBusy(): boolean {
-  if (document.querySelector(".modal")) return true;
+/** False whenever reloading would lose work or yank the page away mid-read. */
+function safeToReload(): boolean {
+  if (document.querySelector(".modal")) return false;
+
   const active = document.activeElement;
   if (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement) {
-    return true;
+    return false;
   }
-  return Array.from(document.querySelectorAll("input, textarea")).some(
+
+  const typed = Array.from(document.querySelectorAll("input, textarea")).some(
     (el) => (el as HTMLInputElement | HTMLTextAreaElement).value.trim().length > 0
   );
+  if (typed) return false;
+
+  // Reading something further down the page: leave them alone.
+  const scrollable = document.documentElement.scrollHeight - window.innerHeight;
+  return scrollable <= 200 || window.scrollY <= 200;
 }

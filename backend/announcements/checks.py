@@ -32,3 +32,29 @@ def cloudinary_configured_in_production(app_configs, **kwargs):
             id="announcements.W001",
         )
     ]
+
+
+@register()
+def database_is_persistent_in_production(app_configs, **kwargs):
+    """Warn when production is running on SQLite inside the container.
+
+    With DATABASE_URL unset the settings fall back to a SQLite file next to the
+    code. That works - migrations apply, posts save - right up until the next
+    deploy replaces the container and every announcement disappears.
+    """
+    if settings.DEBUG:
+        return []
+    engine = settings.DATABASES["default"]["ENGINE"]
+    if "sqlite" not in engine:
+        return []
+    return [
+        Warning(
+            "Running on SQLite in production: every announcement will be lost "
+            "on the next deploy, because the file lives inside the container.",
+            hint=(
+                "Set DATABASE_URL on this service to the Postgres reference, "
+                "e.g. ${{Postgres.DATABASE_URL}} on Railway."
+            ),
+            id="announcements.W002",
+        )
+    ]
