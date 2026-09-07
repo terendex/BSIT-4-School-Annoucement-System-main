@@ -8,6 +8,12 @@ const page = Math.max(1, Number(Astro.url.searchParams.get("page") ?? "1") || 1)
 const search = (Astro.url.searchParams.get("q") ?? "").trim();
 
 const data = await listAnnouncements(page, search);
+// Same shape as /api/feed-state/, so AutoRefresh can compare them.
+const newestUpdate = data.results.reduce(
+  (latest, item) => (item.updated_at > latest ? item.updated_at : latest),
+  ""
+);
+const refreshSignature = `${data.count}:${newestUpdate}`;
 const hasPrev = Boolean(data.previous);
 const hasNext = Boolean(data.next);
 
@@ -20,7 +26,12 @@ const pageHref = (target: number) => {
 };
 ---
 
-<BaseLayout title={SITE_NAME} description={SITE_TAGLINE} canonicalPath="/">
+<BaseLayout
+  title={SITE_NAME}
+  description={SITE_TAGLINE}
+  canonicalPath="/"
+  refreshSignature={refreshSignature}
+>
   <div class="page-heading">
     <h1>Announcements</h1>
     <span class="count-pill">

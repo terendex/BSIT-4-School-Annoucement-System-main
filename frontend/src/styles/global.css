@@ -168,6 +168,27 @@ h3 {
   background: rgba(255, 255, 255, 0.12);
 }
 
+/* --------------------------------------------------- new-content notice */
+.refresh-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px 14px;
+  padding: 10px 20px;
+  background: var(--gold-soft);
+  border-bottom: 1px solid #e4d194;
+  color: #6a4f04;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.refresh-bar--gone {
+  background: var(--danger-soft);
+  border-bottom-color: #f0c4c0;
+  color: #7d1a14;
+}
+
 /* ---------------------------------------------------------------- footer */
 .site-footer {
   flex: none;

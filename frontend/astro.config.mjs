@@ -14,8 +14,11 @@ export default defineConfig({
   integrations: [react()],
   vite: {
     ssr: {
-      // sanitize-html is CJS and must not be bundled for the edge.
-      external: ["sanitize-html"],
+      // sanitize-html must be BUNDLED, not left external. Marked external, the
+      // adapter's file tracing missed its transitive deps (htmlparser2,
+      // escape-string-regexp), so rendering a Markdown body threw
+      // "Cannot find module" at runtime and every announcement page 500'd.
+      noExternal: ["sanitize-html"],
     },
   },
 });

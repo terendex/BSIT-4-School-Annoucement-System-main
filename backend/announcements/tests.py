@@ -59,6 +59,31 @@ class SlugTests(TestCase):
         self.assertEqual(a.excerpt, "Heading See this link now.")
 
 
+class FeedStateTests(TestCase):
+    """The polling endpoint the auto-refresh banner uses."""
+
+    def test_reports_count_and_latest_change(self):
+        a = Announcement.objects.create(title="One")
+        Announcement.objects.create(title="Two", published=False)
+        response = self.client.get(reverse("feed-state"))
+        self.assertEqual(response.status_code, 200)
+        # Drafts must not leak into the count classmates see.
+        self.assertEqual(response.data["count"], 1)
+        self.assertEqual(response.data["last_modified"], a.updated_at.isoformat())
+
+    def test_signature_moves_when_a_post_is_edited(self):
+        a = Announcement.objects.create(title="One")
+        before = self.client.get(reverse("feed-state")).data["last_modified"]
+        a.title = "One (edited)"
+        a.save()
+        after = self.client.get(reverse("feed-state")).data["last_modified"]
+        self.assertNotEqual(before, after)
+
+    def test_empty_feed(self):
+        response = self.client.get(reverse("feed-state"))
+        self.assertEqual(response.data, {"count": 0, "last_modified": None})
+
+
 class HealthCheckTests(TestCase):
     """The deploy healthcheck must answer whatever the platform throws at it."""
 

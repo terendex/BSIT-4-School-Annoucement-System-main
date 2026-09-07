@@ -1,6 +1,7 @@
 import logging
 
 from django.contrib.auth import authenticate
+from django.db.models import Max
 from rest_framework import generics, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAdminUser
@@ -114,6 +115,31 @@ class PublicAnnouncementDetailView(generics.RetrieveAPIView):
 
     def get_queryset(self):
         return Announcement.objects.published().with_attachments()
+
+
+class FeedStateView(APIView):
+    """Tiny fingerprint of the published feed, for polling.
+
+    Returns only a count and the newest updated_at, so the frontend can tell
+    whether anything changed without refetching the whole list every minute -
+    which matters when classmates leave the page open on mobile data.
+    """
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+    throttle_scope = "public"
+
+    def get(self, request):
+        aggregate = Announcement.objects.published().aggregate(
+            last_modified=Max("updated_at")
+        )
+        last_modified = aggregate["last_modified"]
+        return Response(
+            {
+                "count": Announcement.objects.published().count(),
+                "last_modified": last_modified.isoformat() if last_modified else None,
+            }
+        )
 
 
 class SourcePageListView(APIView):

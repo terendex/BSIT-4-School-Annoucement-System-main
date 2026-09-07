@@ -1,4 +1,5 @@
 ---
+import AutoRefresh from "../components/AutoRefresh.tsx";
 import Header from "../components/Header.astro";
 import Footer from "../components/Footer.astro";
 import {
@@ -27,6 +28,10 @@ interface Props {
   publishedTime?: string | null;
   modifiedTime?: string | null;
   noindex?: boolean;
+  /** Fingerprint used to notice new/edited posts. Omit to disable polling. */
+  refreshSignature?: string | null;
+  /** Set on an announcement page so it watches that post specifically. */
+  refreshSlug?: string;
 }
 
 const {
@@ -42,6 +47,8 @@ const {
   publishedTime,
   modifiedTime,
   noindex = false,
+  refreshSignature = null,
+  refreshSlug,
 } = Astro.props;
 
 const pageTitle = title === SITE_NAME ? title : `${title} | ${SITE_NAME}`;
@@ -97,6 +104,11 @@ const ogDescription = description.length > 200 ? `${description.slice(0, 197)}..
   </head>
   <body>
     <Header />
+    {
+      refreshSignature && (
+        <AutoRefresh initial={refreshSignature} slug={refreshSlug} client:idle />
+      )
+    }
     <main class="main">
       <div class="wrap">
         <slot />

@@ -40,6 +40,8 @@ const edited =
   ogType="article"
   publishedTime={announcement.published_at ?? announcement.created_at}
   modifiedTime={announcement.updated_at}
+  refreshSignature={announcement.updated_at}
+  refreshSlug={announcement.slug}
 >
   <a class="back-link" href="/">&larr; All announcements</a>
 
