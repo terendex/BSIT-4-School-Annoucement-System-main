@@ -1,0 +1,17 @@
+---
+import { LOGO_PATH, SITE_NAME, SITE_TAGLINE } from "../lib/config";
+---
+
+<header class="site-header">
+  <div class="wrap site-header__inner">
+    <img class="site-header__logo" src={LOGO_PATH} alt="" width="62" height="62" />
+    <div class="site-header__text">
+      <p class="site-header__title"><a href="/">{SITE_NAME}</a></p>
+      <p class="site-header__tagline">{SITE_TAGLINE}</p>
+    </div>
+    <nav class="site-header__nav" aria-label="Main">
+      <a href="/">Announcements</a>
+      <a href="/admin">Admin</a>
+    </nav>
+  </div>
+</header>

@@ -1,0 +1,43 @@
+---
+import { LOGO_PATH } from "../lib/config";
+import { formatDateTime } from "../lib/format";
+import type { AnnouncementSummary } from "../lib/types";
+
+interface Props {
+  announcement: AnnouncementSummary;
+}
+
+const { announcement } = Astro.props;
+const cover = announcement.cover_image;
+const posted = formatDateTime(announcement.published_at ?? announcement.created_at);
+---
+
+<li class="card">
+  <a class="card__link" href={`/a/${announcement.slug}`}>
+    <div class:list={["card__thumb", !cover && "card__thumb--fallback"]}>
+      <img
+        src={cover?.url ?? LOGO_PATH}
+        alt={cover ? cover.caption || announcement.title : ""}
+        loading="lazy"
+        decoding="async"
+      />
+    </div>
+    <div class="card__body">
+      <h2 class="card__title">{announcement.title}</h2>
+      {announcement.excerpt && <p class="card__excerpt">{announcement.excerpt}</p>}
+      <div class="card__meta">
+        <time datetime={announcement.published_at ?? announcement.created_at}>{posted}</time>
+        {announcement.image_count > 0 && (
+          <span class="tag">
+            {announcement.image_count} {announcement.image_count === 1 ? "photo" : "photos"}
+          </span>
+        )}
+        {announcement.file_count > 0 && (
+          <span class="tag">
+            {announcement.file_count} {announcement.file_count === 1 ? "file" : "files"}
+          </span>
+        )}
+      </div>
+    </div>
+  </a>
+</li>

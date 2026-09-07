@@ -1,0 +1,26 @@
+/** Runtime configuration, read from PUBLIC_* env vars at build/SSR time. */
+
+const stripSlash = (value: string) => value.replace(/\/+$/, "");
+
+/** Django REST API root, e.g. https://announcements-api.onrender.com */
+export const API_BASE_URL = stripSlash(
+  import.meta.env.PUBLIC_API_BASE_URL || "http://127.0.0.1:8000"
+);
+
+/** Public site origin, used to build absolute canonical + OG URLs. */
+export const SITE_URL = stripSlash(
+  import.meta.env.PUBLIC_SITE_URL || "http://localhost:4321"
+);
+
+export const SITE_NAME =
+  import.meta.env.PUBLIC_SITE_NAME || "Saint Louis College - BSIT 4 Announcements";
+
+export const SITE_TAGLINE =
+  import.meta.env.PUBLIC_SITE_TAGLINE ||
+  "Class announcements for BSIT 4, City of San Fernando, La Union.";
+
+/** Logo lives in /public and doubles as the Open Graph fallback image. */
+export const LOGO_PATH = "/logo.png";
+
+export const absoluteUrl = (path: string) =>
+  path.startsWith("http") ? path : `${SITE_URL}${path.startsWith("/") ? path : `/${path}`}`;

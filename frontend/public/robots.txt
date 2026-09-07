@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+
+# Facebook's crawler needs the announcement pages to read Open Graph tags.
+User-agent: facebookexternalhit
+Allow: /

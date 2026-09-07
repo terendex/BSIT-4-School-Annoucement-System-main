@@ -1,0 +1,109 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import AnnouncementCard from "../components/AnnouncementCard.astro";
+import { listAnnouncements } from "../lib/api";
+import { LOGO_PATH, SITE_NAME, SITE_TAGLINE } from "../lib/config";
+
+const page = Math.max(1, Number(Astro.url.searchParams.get("page") ?? "1") || 1);
+const search = (Astro.url.searchParams.get("q") ?? "").trim();
+
+const data = await listAnnouncements(page, search);
+const hasPrev = Boolean(data.previous);
+const hasNext = Boolean(data.next);
+
+const pageHref = (target: number) => {
+  const params = new URLSearchParams();
+  if (search) params.set("q", search);
+  if (target > 1) params.set("page", String(target));
+  const query = params.toString();
+  return query ? `/?${query}` : "/";
+};
+---
+
+<BaseLayout title={SITE_NAME} description={SITE_TAGLINE} canonicalPath="/">
+  <div class="page-heading">
+    <h1>Announcements</h1>
+    <span class="count-pill">
+      {data.count} {data.count === 1 ? "post" : "posts"}
+    </span>
+  </div>
+
+  <form class="searchbar" method="get" action="/" role="search">
+    <input
+      class="input"
+      type="search"
+      name="q"
+      value={search}
+      placeholder="Search announcements..."
+      aria-label="Search announcements"
+    />
+    <button class="btn" type="submit">Search</button>
+    {search && <a class="btn btn--ghost" href="/">Clear</a>}
+  </form>
+
+  {
+    data.results.length === 0 ? (
+      <div class="empty">
+        <img src={LOGO_PATH} alt="" />
+        <p>
+          {search
+            ? `No announcements match "${search}".`
+            : "No announcements have been posted yet. Check back soon."}
+        </p>
+      </div>
+    ) : (
+      <ul class="card-list">
+        {data.results.map((announcement) => (
+          <AnnouncementCard announcement={announcement} />
+        ))}
+      </ul>
+    )
+  }
+
+  {
+    (hasPrev || hasNext) && (
+      <nav class="pager" aria-label="Pagination">
+        {hasPrev ? (
+          <a class="btn btn--ghost" href={pageHref(page - 1)} rel="prev">
+            &larr; Newer
+          </a>
+        ) : (
+          <span />
+        )}
+        <span class="pager__status">Page {page}</span>
+        {hasNext ? (
+          <a class="btn btn--ghost" href={pageHref(page + 1)} rel="next">
+            Older &rarr;
+          </a>
+        ) : (
+          <span />
+        )}
+      </nav>
+    )
+  }
+</BaseLayout>
+
+<style>
+  .searchbar {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 22px;
+  }
+
+  .searchbar .input {
+    max-width: 380px;
+  }
+
+  .pager {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 28px;
+  }
+
+  .pager__status {
+    font-size: 0.86rem;
+    color: var(--muted);
+  }
+</style>

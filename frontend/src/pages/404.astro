@@ -1,0 +1,20 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import { LOGO_PATH } from "../lib/config";
+---
+
+<BaseLayout
+  title="Announcement not found"
+  description="This announcement does not exist, or it is not published yet."
+  noindex={true}
+>
+  <div class="empty">
+    <img src={LOGO_PATH} alt="" />
+    <h1>Announcement not found</h1>
+    <p>
+      This link is either wrong, or the announcement was taken down. Check the
+      board for the latest posts.
+    </p>
+    <p><a class="btn" href="/">See all announcements</a></p>
+  </div>
+</BaseLayout>

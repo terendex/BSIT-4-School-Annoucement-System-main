@@ -1,0 +1,228 @@
+---
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import Gallery from "../../components/Gallery.tsx";
+import ShareBar from "../../components/ShareBar.tsx";
+import { getAnnouncement } from "../../lib/api";
+import { absoluteUrl } from "../../lib/config";
+import { formatDateTime, formatBytes, fileLabel } from "../../lib/format";
+import { renderMarkdown } from "../../lib/markdown";
+
+// SSR (no prerender): Facebook's crawler must receive the OG tags in the HTML.
+const { slug } = Astro.params;
+const announcement = await getAnnouncement(slug!);
+
+// A real 404 status (not a redirect) so crawlers and Messenger do not cache
+// an unpublished or deleted announcement as a valid page.
+if (!announcement) {
+  return new Response(null, { status: 404, statusText: "Not found" });
+}
+
+const bodyHtml = renderMarkdown(announcement.body);
+const canonicalPath = `/a/${announcement.slug}`;
+const shareUrl = absoluteUrl(canonicalPath);
+const cover = announcement.cover_image;
+const posted = formatDateTime(announcement.published_at ?? announcement.created_at);
+const edited =
+  announcement.updated_at && announcement.updated_at !== announcement.created_at
+    ? formatDateTime(announcement.updated_at)
+    : null;
+---
+
+<BaseLayout
+  title={announcement.title}
+  description={announcement.excerpt}
+  image={cover?.url ?? null}
+  imageAlt={cover?.caption || announcement.title}
+  canonicalPath={canonicalPath}
+  ogType="article"
+  publishedTime={announcement.published_at ?? announcement.created_at}
+  modifiedTime={announcement.updated_at}
+>
+  <a class="back-link" href="/">&larr; All announcements</a>
+
+  <article class="announcement">
+    <header class="announcement__header">
+      <h1>{announcement.title}</h1>
+      <p class="announcement__dates">
+        Posted <time datetime={announcement.published_at ?? announcement.created_at}>{posted}</time>
+        {edited && <> &middot; updated {edited}</>}
+      </p>
+    </header>
+
+    {bodyHtml && <div class="prose" set:html={bodyHtml} />}
+
+    {
+      announcement.images.length > 0 && (
+        <section>
+          <h2 class="section-title">
+            {announcement.images.length === 1 ? "Photo" : "Photos"}
+          </h2>
+          <Gallery images={announcement.images} client:visible />
+        </section>
+      )
+    }
+
+    {
+      announcement.files.length > 0 && (
+        <section>
+          <h2 class="section-title">Attachments</h2>
+          <ul class="files">
+            {announcement.files.map((file) => (
+              <li>
+                <a class="file" href={file.url} target="_blank" rel="noopener noreferrer">
+                  <span class="file__badge">{fileLabel(file.original_filename)}</span>
+                  <span>
+                    <span class="file__name">{file.caption || file.original_filename}</span>
+                    <br />
+                    <span class="file__meta">{formatBytes(file.size)} &middot; opens in a new tab</span>
+                  </span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )
+    }
+
+    <section>
+      <h2 class="section-title">Share this announcement</h2>
+      <ShareBar url={shareUrl} title={announcement.title} client:load />
+    </section>
+  </article>
+</BaseLayout>
+
+<style is:global>
+  .gallery {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+    gap: 12px;
+  }
+
+  .gallery__button {
+    display: block;
+    width: 100%;
+    padding: 0;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    background: var(--navy-50);
+    cursor: zoom-in;
+    overflow: hidden;
+  }
+
+  .gallery__button img {
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    object-fit: cover;
+    transition: transform 0.2s ease;
+  }
+
+  .gallery__button:hover img {
+    transform: scale(1.03);
+  }
+
+  .gallery__caption {
+    margin: 6px 2px 0;
+    font-size: 0.82rem;
+    color: var(--muted);
+  }
+
+  .lightbox {
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    background: rgba(9, 12, 32, 0.92);
+    display: grid;
+    place-items: center;
+    padding: 24px;
+  }
+
+  .lightbox__stage {
+    max-width: min(1100px, 100%);
+    max-height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .lightbox__image {
+    max-width: 100%;
+    max-height: 78vh;
+    object-fit: contain;
+    border-radius: 6px;
+    box-shadow: var(--shadow-lg);
+  }
+
+  .lightbox__caption,
+  .lightbox__counter {
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 0.88rem;
+    margin: 0;
+    text-align: center;
+  }
+
+  .lightbox__counter {
+    position: absolute;
+    bottom: 18px;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+
+  .lightbox__close,
+  .lightbox__nav {
+    position: absolute;
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    color: #fff;
+    border-radius: 50%;
+    width: 46px;
+    height: 46px;
+    font-size: 1.6rem;
+    line-height: 1;
+    cursor: pointer;
+    display: grid;
+    place-items: center;
+  }
+
+  .lightbox__close:hover,
+  .lightbox__nav:hover {
+    background: rgba(255, 255, 255, 0.24);
+  }
+
+  .lightbox__close {
+    top: 18px;
+    right: 18px;
+  }
+
+  .lightbox__nav--prev {
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+  }
+
+  .lightbox__nav--next {
+    right: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+  }
+
+  .sharebar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .sharebar__url {
+    font-size: 0.8rem;
+    color: var(--muted);
+    background: var(--navy-50);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 6px 10px;
+    word-break: break-all;
+  }
+</style>
