@@ -16,7 +16,7 @@ import {
   updateAnnouncement,
 } from "../../lib/adminClient";
 import { SITE_URL } from "../../lib/config";
-import { formatDateTime } from "../../lib/format";
+import { formatCompact, formatDateTime } from "../../lib/format";
 import type { AdminUser, Announcement, Taxonomy } from "../../lib/types";
 
 type Dialog =
@@ -308,7 +308,6 @@ export default function AdminDashboard() {
                 <th>Title</th>
                 <th>Filed under</th>
                 <th>Status</th>
-                <th>Posted by</th>
                 <th>Updated</th>
                 <th aria-label="Actions" />
               </tr>
@@ -329,6 +328,7 @@ export default function AdminDashboard() {
                         {announcement.title}
                       </a>
                       <span className="field__hint">
+                        {mine ? "You" : announcement.author_name || "Unknown"} &middot;{" "}
                         {announcement.image_count} photo
                         {announcement.image_count === 1 ? "" : "s"},{" "}
                         {announcement.file_count} file
@@ -359,11 +359,13 @@ export default function AdminDashboard() {
                         </span>
                       )}
                     </td>
-                    <td className="admin-table__nowrap" data-label="Posted by">
-                      {mine ? "You" : announcement.author_name || "-"}
-                    </td>
                     <td className="admin-table__nowrap" data-label="Updated">
-                      {formatDateTime(announcement.updated_at)}
+                      <time
+                        dateTime={announcement.updated_at}
+                        title={formatDateTime(announcement.updated_at)}
+                      >
+                        {formatCompact(announcement.updated_at)}
+                      </time>
                     </td>
                     <td>
                       <div className="admin-table__actions">

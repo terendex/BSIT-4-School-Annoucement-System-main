@@ -9,7 +9,7 @@ import {
   resendInvite,
   updatePublisher,
 } from "../../lib/adminClient";
-import { formatDateTime } from "../../lib/format";
+import { formatCompact, formatDateTime } from "../../lib/format";
 import type { Publisher } from "../../lib/types";
 
 interface Props {
@@ -232,8 +232,8 @@ export default function PublishersModal({ currentUserId, onClose }: Props) {
                       <td data-label="Status">
                         <StatusTag publisher={publisher} />
                         {publisher.last_login && (
-                          <span className="field__hint">
-                            Last in: {formatDateTime(publisher.last_login)}
+                          <span className="field__hint" title={formatDateTime(publisher.last_login)}>
+                            Last in: {formatCompact(publisher.last_login)}
                           </span>
                         )}
                       </td>

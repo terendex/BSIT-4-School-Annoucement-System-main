@@ -15,6 +15,32 @@ export function formatDateTime(iso: string | null): string {
   return Number.isNaN(date.getTime()) ? "" : DATE_FORMAT.format(date);
 }
 
+// Table columns: the year is noise for anything posted this year, and it was
+// costing the title column roughly 40px of width per row.
+const COMPACT_THIS_YEAR = new Intl.DateTimeFormat("en-PH", {
+  month: "short",
+  day: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
+  timeZone: "Asia/Manila",
+});
+
+const COMPACT_OTHER_YEAR = new Intl.DateTimeFormat("en-PH", {
+  year: "numeric",
+  month: "short",
+  day: "numeric",
+  timeZone: "Asia/Manila",
+});
+
+/** "Sep 8, 5:06 AM" this year, "Sep 8, 2025" for anything older. */
+export function formatCompact(iso: string | null): string {
+  if (!iso) return "";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  const sameYear = date.getFullYear() === new Date().getFullYear();
+  return (sameYear ? COMPACT_THIS_YEAR : COMPACT_OTHER_YEAR).format(date);
+}
+
 export function formatDate(iso: string | null): string {
   if (!iso) return "";
   const date = new Date(iso);

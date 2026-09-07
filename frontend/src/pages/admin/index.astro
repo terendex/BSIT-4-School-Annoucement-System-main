@@ -196,10 +196,30 @@ import AdminDashboard from "../../components/admin/AdminDashboard.tsx";
     width: 100%;
     border-collapse: collapse;
     font-size: 0.92rem;
-    /* Wide enough for the action buttons to sit on one row; the wrapper
-       scrolls horizontally on anything narrower. */
-    min-width: 940px;
+    /* Fixed layout, so the columns below get the widths they are given.
+       Under auto layout every nowrap column took what it wanted and the
+       title - the only wrappable one - was squeezed to a word per line. */
+    table-layout: fixed;
+    /* The page is 960px wide with 20px padding either side, so anything over
+       920px guarantees a horizontal scrollbar at full width. */
+    min-width: 880px;
   }
+
+  /* Pixel widths for the columns whose content is a known size, and `auto`
+     for the title so it absorbs whatever is left - and grows on a wide
+     screen instead of everything stretching. Percentages were guesswork:
+     they left the four action buttons a few pixels short of fitting. */
+  .admin-table th:nth-child(1) { width: auto; }   /* title    - the remainder */
+  .admin-table th:nth-child(2) { width: 150px; }  /* filed under */
+  .admin-table th:nth-child(3) { width: 112px; }  /* status */
+  .admin-table th:nth-child(4) { width: 125px; }  /* updated */
+  .admin-table th:nth-child(5) { width: 265px; }  /* Edit Files Share Delete */
+
+  /* Publishers: three buttons, and "Resend invite" is the long one. */
+  .admin-table--compact th:nth-child(1) { width: auto; }   /* account */
+  .admin-table--compact th:nth-child(2) { width: 150px; }  /* status */
+  .admin-table--compact th:nth-child(3) { width: 70px; }   /* posts */
+  .admin-table--compact th:nth-child(4) { width: 285px; }
 
   .admin-table th,
   .admin-table td {
@@ -232,17 +252,15 @@ import AdminDashboard from "../../components/admin/AdminDashboard.tsx";
      820px modal - the dashboard's min-width would make it scroll sideways for
      no reason. */
   .admin-table--compact {
-    min-width: 560px;
+    /* Fits inside the 820px modal without scrolling, while leaving room for
+       "Resend invite", "Disable" and "Remove" on one line. */
+    min-width: 700px;
   }
 
-  /* The filing badges need room; without it "Exam schedule" and "4th year"
-     stacked into a narrow ragged column. */
-  .admin-table__filed {
-    min-width: 200px;
-  }
-
-  .admin-table__filed .tag + .tag {
-    margin-left: 5px;
+  /* The badges are nowrap already, so they need no minimum of their own -
+     one was previously stealing width from the title. */
+  .admin-table__filed .tag {
+    margin: 2px 4px 2px 0;
   }
 
   .admin-table tr:last-child td {
@@ -268,13 +286,20 @@ import AdminDashboard from "../../components/admin/AdminDashboard.tsx";
 
   .admin-table__actions {
     display: flex;
-    gap: 6px;
+    gap: 5px;
     justify-content: flex-end;
     flex-wrap: nowrap;
   }
 
+  /* Tighter than a standalone button: four of these share one column. */
   .admin-table__actions .btn {
     white-space: nowrap;
+    padding: 6px 9px;
+  }
+
+  /* A long unbroken title must wrap rather than widen the fixed column. */
+  .admin-table__title {
+    overflow-wrap: anywhere;
   }
 
   button.tag {

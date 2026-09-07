@@ -114,7 +114,7 @@ export default function ChangePasswordForm({ user, forced, onChanged, onCancel }
           <span className="field__label">Confirm new password</span>
           <input
             className="input"
-            type={show ? "text" : "password"}
+            type="password"
             value={confirm}
             onChange={(event) => setConfirm(event.target.value)}
             autoComplete="new-password"

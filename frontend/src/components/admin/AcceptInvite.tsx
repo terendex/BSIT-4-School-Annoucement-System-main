@@ -154,7 +154,7 @@ export default function AcceptInvite({ token }: Props) {
                 <span className="field__label">Confirm password</span>
                 <input
                   className="input"
-                  type={show ? "text" : "password"}
+                  type="password"
                   value={confirm}
                   onChange={(event) => setConfirm(event.target.value)}
                   autoComplete="new-password"
