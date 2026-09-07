@@ -864,6 +864,141 @@ h3 {
 /* ========================================================================
    Sign in / password screens
    ======================================================================== */
+.auth {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  /* Sits a little above centre - a form pinned to the exact middle reads as
+     lower than centre once the header is above it. */
+  padding: 10px 0 48px;
+}
+
+.auth__panel {
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+  max-width: 428px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+  padding: 30px 30px 24px;
+}
+
+/* Seal colours along the top edge, so the panel reads as the school's own
+   rather than a generic login box. */
+.auth__panel::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 4px;
+  background: linear-gradient(90deg, var(--navy-700) 0%, var(--navy-600) 55%, var(--gold) 100%);
+}
+
+.auth__brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 18px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--line);
+}
+
+.auth__seal {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  object-fit: contain;
+}
+
+.auth__site {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.4;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.auth__title {
+  margin: 0 0 3px;
+  font-size: 1.55rem;
+  line-height: 1.2;
+}
+
+.auth__subtitle {
+  margin: 0 0 22px;
+  font-size: 0.92rem;
+  color: var(--muted);
+}
+
+.auth .input {
+  padding: 11px 13px;
+}
+
+/* The error needs to sit beside its icon without the icon shrinking. */
+.auth__alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+}
+
+.auth__alert svg {
+  flex: none;
+  margin-top: 1px;
+}
+
+.auth__submit {
+  width: 100%;
+  margin-top: 6px;
+  padding: 12px 18px;
+  font-size: 0.96rem;
+}
+
+.auth__foot {
+  margin-top: 22px;
+  padding-top: 17px;
+  border-top: 1px solid var(--line);
+  font-size: 0.81rem;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+.auth__foot p {
+  margin: 0 0 9px;
+}
+
+.auth__foot p:last-child {
+  margin-bottom: 0;
+}
+
+/* Outside the panel: the way back out, for anyone who landed here by mistake. */
+.auth__aside {
+  max-width: 428px;
+  margin: 18px 0 0;
+  text-align: center;
+  font-size: 0.84rem;
+  color: var(--muted);
+}
+
+@media (max-width: 520px) {
+  .auth {
+    padding-top: 0;
+  }
+
+  .auth__panel {
+    padding: 24px 20px 20px;
+    box-shadow: var(--shadow-sm);
+  }
+
+  .auth__title {
+    font-size: 1.4rem;
+  }
+}
+
+/* The forced password change reuses the panel; the voluntary one runs inside a
+   modal, which supplies its own frame. */
 .auth-card {
   background: var(--paper);
   border: 1px solid var(--line);
@@ -874,12 +1009,13 @@ h3 {
   margin: 0 auto;
 }
 
-/* Inside a modal the panel already provides the frame. */
-.modal__body .auth-card {
+.modal__body .auth-card,
+.auth__panel .auth-card {
   border: none;
   box-shadow: none;
   padding: 0;
   max-width: none;
+  margin: 0;
 }
 
 .auth-card__actions {

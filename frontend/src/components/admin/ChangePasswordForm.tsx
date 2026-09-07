@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { ApiError, changePassword } from "../../lib/adminClient";
 import type { AdminUser } from "../../lib/types";
+import { LOGO_PATH, SITE_NAME } from "../../lib/config";
 import { CheckIcon, DotIcon, EyeIcon, EyeOffIcon } from "./icons";
 
 interface Props {
@@ -79,12 +80,10 @@ export default function ChangePasswordForm({ user, forced, onChanged, onCancel }
     }
   };
 
-  return (
+  const body = (
     <div className="auth-card">
       {forced && (
         <div className="alert alert--info">
-          <strong>Set your own password to continue.</strong>
-          <br />
           The password from your invite email is temporary and works only once.
         </div>
       )}
@@ -166,19 +165,45 @@ export default function ChangePasswordForm({ user, forced, onChanged, onCancel }
           )}
         </label>
 
-        <div className="auth-card__actions">
-          {onCancel && !forced ? (
-            <button type="button" className="btn btn--ghost" onClick={onCancel}>
-              Cancel
-            </button>
-          ) : (
-            <span />
-          )}
-          <button type="submit" className="btn" disabled={!canSubmit}>
-            {busy ? "Saving..." : "Save password"}
+        {forced ? (
+          <button type="submit" className="btn auth__submit" disabled={!canSubmit}>
+            {busy ? "Saving..." : "Save password and continue"}
           </button>
-        </div>
+        ) : (
+          <div className="auth-card__actions">
+            {onCancel ? (
+              <button type="button" className="btn btn--ghost" onClick={onCancel}>
+                Cancel
+              </button>
+            ) : (
+              <span />
+            )}
+            <button type="submit" className="btn" disabled={!canSubmit}>
+              {busy ? "Saving..." : "Save password"}
+            </button>
+          </div>
+        )}
       </form>
+    </div>
+  );
+
+  if (!forced) return body;
+
+  return (
+    <div className="auth">
+      <div className="auth__panel">
+        <div className="auth__brand">
+          <img className="auth__seal" src={LOGO_PATH} alt="" width="46" height="46" />
+          <p className="auth__site">{SITE_NAME}</p>
+        </div>
+
+        <h1 className="auth__title">Set your password</h1>
+        <p className="auth__subtitle">
+          One step left, {user.full_name?.split(" ")[0] || "then you are in"}.
+        </p>
+
+        {body}
+      </div>
     </div>
   );
 }
