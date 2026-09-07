@@ -25,6 +25,6 @@ RUN DJANGO_SECRET_KEY=build-time-only-not-a-secret \
     DJANGO_DEBUG=False \
     python manage.py collectstatic --no-input --clear
 
-EXPOSE 8000
+EXPOSE 8080
 
-CMD ["sh", "-c", "gunicorn config.wsgi:application --bind 0.0.0.0:${PORT:-8000} --workers 2 --timeout 60"]
+CMD ["sh", "-c", "gunicorn config.wsgi:application --bind 0.0.0.0:${PORT:-8080} --workers 2 --timeout 60"]

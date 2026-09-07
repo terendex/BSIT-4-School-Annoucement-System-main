@@ -41,13 +41,11 @@ PLATFORM_HOSTNAMES = [
 ]
 ALLOWED_HOSTS.extend(PLATFORM_HOSTNAMES)
 
-if os.getenv("RAILWAY_ENVIRONMENT_NAME"):
-    # Railway reaches the container two ways that are not the public domain:
-    # service-to-service calls over *.railway.internal, and deploy healthchecks
-    # sent with "Host: healthcheck.railway.app". Without both, Django answers
-    # 400 DisallowedHost and the deploy is rolled back as unhealthy.
+# Service-to-service calls inside Railway use *.railway.internal rather than
+# the public domain. Healthchecks are handled by HealthCheckMiddleware, which
+# runs before this list is ever consulted.
+if os.getenv("RAILWAY_ENVIRONMENT_NAME") or os.getenv("RAILWAY_PRIVATE_DOMAIN"):
     ALLOWED_HOSTS.append(".railway.internal")
-    ALLOWED_HOSTS.append("healthcheck.railway.app")
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -62,6 +60,10 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    # First on purpose: answers /healthz/ without touching the Host header,
+    # so platform healthchecks cannot be broken by ALLOWED_HOSTS or the HTTPS
+    # redirect. See config/middleware.py.
+    "config.middleware.HealthCheckMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "corsheaders.middleware.CorsMiddleware",

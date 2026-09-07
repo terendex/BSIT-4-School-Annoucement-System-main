@@ -59,6 +59,35 @@ class SlugTests(TestCase):
         self.assertEqual(a.excerpt, "Heading See this link now.")
 
 
+class HealthCheckTests(TestCase):
+    """The deploy healthcheck must answer whatever the platform throws at it."""
+
+    @override_settings(ALLOWED_HOSTS=["example.com"])
+    def test_answers_for_a_host_not_in_allowed_hosts(self):
+        # Railway probes with Host: healthcheck.railway.app. Anything that
+        # calls request.get_host() would 400 first, failing the deploy.
+        for host in ["healthcheck.railway.app", "10.0.0.5:8080", "anything"]:
+            response = self.client.get("/healthz/", HTTP_HOST=host)
+            self.assertEqual(response.status_code, 200, host)
+            self.assertEqual(response.json(), {"status": "ok"})
+
+    @override_settings(ALLOWED_HOSTS=["example.com"])
+    def test_answers_without_the_trailing_slash(self):
+        response = self.client.get("/healthz", HTTP_HOST="healthcheck.railway.app")
+        self.assertEqual(response.status_code, 200)
+
+    @override_settings(SECURE_SSL_REDIRECT=True, ALLOWED_HOSTS=["example.com"])
+    def test_is_not_redirected_to_https(self):
+        # Probes arrive over plain HTTP; a 301 would read as unhealthy.
+        response = self.client.get("/healthz/", HTTP_HOST="healthcheck.railway.app")
+        self.assertEqual(response.status_code, 200)
+
+    @override_settings(ALLOWED_HOSTS=["example.com"])
+    def test_other_paths_still_reject_unknown_hosts(self):
+        response = self.client.get("/api/announcements/", HTTP_HOST="evil.example.com")
+        self.assertEqual(response.status_code, 400)
+
+
 class PublicApiTests(TestCase):
     def setUp(self):
         self.client = APIClient()
