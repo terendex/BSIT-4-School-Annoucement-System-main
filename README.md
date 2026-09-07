@@ -288,13 +288,21 @@ service's **Settings**:
 
 | Setting | Value |
 |---|---|
-| Root Directory | leave as `/` (the root Dockerfile handles it) |
+| Root Directory | either `/` or `backend` — both build |
 | Networking → Public Networking | **Generate Domain** |
 
-Leave **Root Directory** at its default (`/`). The repo root holds a
-[`Dockerfile`](Dockerfile) that builds the API, and [`railway.json`](railway.json)
-supplies the healthcheck and the migration step — so a freshly created service
-builds correctly with nothing to configure. Migrations and `ensure_admin` run as
+**Root Directory can be either `/` or `backend`** — both work. There is a
+Dockerfile and a `railway.json` at each level, and Railway picks up whichever
+matches the setting:
+
+| Root Directory | uses |
+|---|---|
+| `/` (default) | [`Dockerfile`](Dockerfile) + [`railway.json`](railway.json) |
+| `backend` | [`backend/Dockerfile`](backend/Dockerfile) + [`backend/railway.json`](backend/railway.json) |
+
+Both produce the same image and both were built and run against Postgres before
+being committed. Either way `railway.json` supplies the healthcheck and the
+migration step, so there is nothing to configure by hand. Migrations and `ensure_admin` run as
 a **pre-deploy** step (after the build, before traffic switches over), so a
 failed migration stops the release instead of half-applying it.
 
@@ -421,7 +429,7 @@ config, not on visitor input. Re-run `npm audit` after adapter updates.
 ## Project layout
 
 ```
-Dockerfile             builds the API image (used by Railway)
+Dockerfile             builds the API image (Root Directory = /)
 railway.json           healthcheck + pre-deploy migrations
 
 backend/
@@ -437,6 +445,8 @@ backend/
     exceptions.py      uniform { detail, errors } error envelope
     tests.py           22 tests
     management/commands/ensure_admin.py
+  Dockerfile           same image for Root Directory = backend
+  railway.json         healthcheck + pre-deploy migrations
   build.sh             Render build: install, collectstatic, migrate, ensure_admin
 
 frontend/

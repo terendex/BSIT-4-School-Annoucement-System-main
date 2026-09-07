@@ -1,0 +1,8 @@
+# Build context is backend/ - keep local-only artefacts out of the image.
+.venv/
+.env
+db.sqlite3
+media/
+staticfiles/
+**/__pycache__/
+**/*.py[cod]
