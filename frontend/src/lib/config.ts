@@ -34,6 +34,13 @@ export const SITE_URL = stripSlash(
 export const SITE_NAME =
   import.meta.env.PUBLIC_SITE_NAME || "Terendex's Announcement Services";
 
+/**
+ * Optional Facebook App ID. Purely for Facebook Insights (share analytics);
+ * link previews render fine without it. Setting it silences the
+ * "missing fb:app_id" warning in the Sharing Debugger.
+ */
+export const FB_APP_ID = import.meta.env.PUBLIC_FB_APP_ID || "";
+
 export const SITE_TAGLINE =
   import.meta.env.PUBLIC_SITE_TAGLINE ||
   "Announcements for BSIT 4 - Saint Louis College, City of San Fernando, La Union.";
