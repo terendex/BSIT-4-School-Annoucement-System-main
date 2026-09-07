@@ -736,9 +736,8 @@ h3 {
 
 /* ========================================================================
    Filing: category + year level
-   The same six tones are used by the filter chips on the feed, the badges on
-   a card, and the status tags in the dashboard, so one colour always means
-   one thing.
+   The same six tones are used by the badges on a card and the status tags in
+   the dashboard, so one colour always means one thing.
    ======================================================================== */
 :root {
   --tone-danger-bg: #fdecea;
@@ -785,26 +784,52 @@ h3 {
 .tag--neutral { --tone-bg: var(--tone-neutral-bg); --tone-line: var(--tone-neutral-line); --tone-ink: var(--tone-neutral-ink); }
 
 /* ------------------------------------------------------------ filter bar */
-.filters {
-  display: grid;
-  gap: 8px;
-  margin-bottom: 20px;
-}
-
-.filters__row {
+/* Dropdowns rather than a wall of chips: six categories and five year levels
+   is eleven tap targets competing with the announcements themselves. Two
+   selects say the same thing in one row and shrink honestly on a phone. */
+.filterbar {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  gap: 7px;
+  align-items: flex-end;
+  gap: 10px 12px;
+  margin-bottom: 18px;
+  padding: 14px 16px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
 }
 
-.filters__label {
-  font-size: 0.72rem;
+.filterbar__field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.filterbar__field--grow {
+  flex: 1 1 210px;
+}
+
+.filterbar__label {
+  font-size: 0.71rem;
   letter-spacing: 0.07em;
   text-transform: uppercase;
   font-weight: 700;
   color: var(--muted);
-  min-width: 74px;
+}
+
+/* .select carries width:100% from the shared field styles, which would put
+   each dropdown on a row of its own inside this flex bar. */
+.filterbar .select {
+  width: auto;
+  min-width: 172px;
+}
+
+.filterbar__actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
 }
 
 .filters__summary {
@@ -813,44 +838,27 @@ h3 {
   margin: 0 0 14px;
 }
 
-.chip {
-  display: inline-block;
-  border: 1px solid var(--line);
-  background: var(--paper);
-  color: var(--navy-700);
-  border-radius: 999px;
-  padding: 5px 13px;
-  font-size: 0.82rem;
-  font-weight: 600;
-  text-decoration: none;
-  line-height: 1.35;
-  transition: background 0.12s ease, border-color 0.12s ease;
-}
+@media (max-width: 640px) {
+  .filterbar {
+    padding: 12px;
+  }
 
-.chip:hover {
-  border-color: var(--navy-600);
-  text-decoration: none;
-}
+  .filterbar__field,
+  .filterbar__field--grow {
+    flex: 1 1 100%;
+  }
 
-.chip--danger { border-color: var(--tone-danger-line); color: var(--tone-danger-ink); }
-.chip--success { border-color: var(--tone-success-line); color: var(--tone-success-ink); }
-.chip--info { border-color: var(--tone-info-line); color: var(--tone-info-ink); }
-.chip--warning { border-color: var(--tone-warning-line); color: var(--tone-warning-ink); }
-.chip--accent { border-color: var(--tone-accent-line); color: var(--tone-accent-ink); }
+  .filterbar .select {
+    width: 100%;
+    min-width: 0;
+  }
 
-/* The selected chip wins over any tone, so "which one is on" is never in doubt. */
-.chip--on,
-.chip--on:hover {
-  background: var(--navy-700);
-  border-color: var(--navy-700);
-  color: #fff;
-}
+  .filterbar__actions {
+    width: 100%;
+  }
 
-/* Touch targets stay thumb-sized on phones. */
-@media (pointer: coarse) {
-  .chip {
-    padding: 9px 15px;
-    font-size: 0.86rem;
+  .filterbar__actions .btn {
+    flex: 1 1 auto;
   }
 }
 

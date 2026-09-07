@@ -16,7 +16,7 @@ const [data, taxonomy, feedState] = await Promise.all([
   getFeedState(filters),
 ]);
 
-// Category slug -> tone, so a card badge and its filter chip always agree.
+// Category slug -> tone, so a card badge and its filter always agree.
 const toneFor = (slug: string) =>
   taxonomy.categories.find((item) => item.slug === slug)?.tone ?? "neutral";
 
@@ -30,22 +30,18 @@ if (search) refreshParams.set("q", search);
 if (category) refreshParams.set("category", category);
 if (year) refreshParams.set("year", year);
 const refreshQuery = refreshParams.toString();
+
 const hasPrev = Boolean(data.previous);
 const hasNext = Boolean(data.next);
 
-/** Build a URL keeping the other filters intact, and always resetting to page 1. */
-const hrefWith = (changes: Record<string, string>, target = 1) => {
-  const params = new URLSearchParams();
-  const merged = { q: search, category, year, ...changes };
-  for (const [key, value] of Object.entries(merged)) {
-    if (value) params.set(key, value);
-  }
+/** Keep the active filters while turning the page. */
+const pageHref = (target: number) => {
+  const params = new URLSearchParams(refreshQuery);
   if (target > 1) params.set("page", String(target));
   const query = params.toString();
   return query ? `/?${query}` : "/";
 };
 
-const pageHref = (target: number) => hrefWith({}, target);
 const activeCategory = taxonomy.categories.find((item) => item.slug === category);
 const activeYear = taxonomy.year_levels.find((item) => item.slug === year);
 const isFiltered = Boolean(search || category || year);
@@ -65,58 +61,75 @@ const isFiltered = Boolean(search || category || year);
     </span>
   </div>
 
-  <form class="searchbar" method="get" action="/" role="search">
-    <input
-      class="input"
-      type="search"
-      name="q"
-      value={search}
-      placeholder="Search announcements..."
-      aria-label="Search announcements"
-    />
-    {category && <input type="hidden" name="category" value={category} />}
-    {year && <input type="hidden" name="year" value={year} />}
-    <button class="btn" type="submit">Search</button>
-    {isFiltered && <a class="btn btn--ghost" href="/">Clear all</a>}
+  <!--
+    A plain GET form, so filtering still works with JavaScript switched off and
+    every filtered view keeps its own shareable URL. The inline script at the
+    bottom only removes the need to press Apply.
+  -->
+  <form class="filterbar" method="get" action="/" role="search" id="filter-form">
+    <div class="filterbar__field filterbar__field--grow">
+      <label class="filterbar__label" for="filter-q">Search</label>
+      <input
+        class="input"
+        id="filter-q"
+        type="search"
+        name="q"
+        value={search}
+        placeholder="Search announcements..."
+      />
+    </div>
+
+    <div class="filterbar__field">
+      <label class="filterbar__label" for="filter-category">Category</label>
+      <select class="select" id="filter-category" name="category">
+        <option value="">All categories</option>
+        {
+          taxonomy.categories.map((item) => (
+            <option value={item.slug} selected={category === item.slug}>
+              {item.name}
+            </option>
+          ))
+        }
+      </select>
+    </div>
+
+    <div class="filterbar__field">
+      <label class="filterbar__label" for="filter-year">Year level</label>
+      <select class="select" id="filter-year" name="year">
+        {
+          taxonomy.year_levels.map((item) => {
+            const value = item.slug === "all" ? "" : item.slug;
+            return (
+              <option value={value} selected={year === value}>
+                {item.name}
+              </option>
+            );
+          })
+        }
+      </select>
+    </div>
+
+    <div class="filterbar__actions">
+      <button class="btn" type="submit">Apply</button>
+      {
+        isFiltered && (
+          <a class="btn btn--ghost" href="/">
+            Clear
+          </a>
+        )
+      }
+    </div>
   </form>
 
   {
-    taxonomy.categories.length > 0 && (
-      <div class="filters">
-        <nav class="filters__row" aria-label="Filter by category">
-          <span class="filters__label">Category</span>
-          <a class:list={["chip", !category && "chip--on"]} href={hrefWith({ category: "" })}>
-            All
-          </a>
-          {taxonomy.categories.map((item) => (
-            <a
-              class:list={["chip", `chip--${item.tone}`, category === item.slug && "chip--on"]}
-              href={hrefWith({ category: item.slug })}
-              aria-current={category === item.slug ? "true" : undefined}
-              title={item.description}
-            >
-              {item.short}
-            </a>
-          ))}
-        </nav>
-
-        <nav class="filters__row" aria-label="Filter by year level">
-          <span class="filters__label">Year level</span>
-          {taxonomy.year_levels.map((item) => {
-            const value = item.slug === "all" ? "" : item.slug;
-            const on = year === value;
-            return (
-              <a
-                class:list={["chip", on && "chip--on"]}
-                href={hrefWith({ year: value })}
-                aria-current={on ? "true" : undefined}
-              >
-                {item.short}
-              </a>
-            );
-          })}
-        </nav>
-      </div>
+    isFiltered && data.results.length > 0 && (
+      <p class="filters__summary">
+        Showing {activeCategory ? activeCategory.name.toLowerCase() : "all"} announcements
+        {activeYear && activeYear.slug !== "all"
+          ? ` for ${activeYear.name}, plus those for everyone`
+          : ""}
+        {search ? ` matching "${search}"` : ""}.
+      </p>
     )
   }
 
@@ -138,25 +151,14 @@ const isFiltered = Boolean(search || category || year);
         )}
       </div>
     ) : (
-      <>
-        {(activeCategory || activeYear) && (
-          <p class="filters__summary">
-            Showing {activeCategory ? activeCategory.name.toLowerCase() : "all"} announcements
-            {activeYear && activeYear.slug !== "all"
-              ? ` for ${activeYear.name}, plus those for everyone`
-              : ""}
-            .
-          </p>
-        )}
-        <ul class="card-list">
-          {data.results.map((announcement) => (
-            <AnnouncementCard
-              announcement={announcement}
-              tone={toneFor(announcement.category)}
-            />
-          ))}
-        </ul>
-      </>
+      <ul class="card-list">
+        {data.results.map((announcement) => (
+          <AnnouncementCard
+            announcement={announcement}
+            tone={toneFor(announcement.category)}
+          />
+        ))}
+      </ul>
     )
   }
 
@@ -183,25 +185,21 @@ const isFiltered = Boolean(search || category || year);
   }
 </BaseLayout>
 
+<script is:inline>
+  // Progressive enhancement: apply a dropdown the moment it changes. Without
+  // JavaScript the Apply button does the same job, so nothing is lost.
+  (function () {
+    var form = document.getElementById("filter-form");
+    if (!form) return;
+    Array.prototype.forEach.call(form.querySelectorAll("select"), function (select) {
+      select.addEventListener("change", function () {
+        form.submit();
+      });
+    });
+  })();
+</script>
+
 <style>
-  .searchbar {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin-bottom: 14px;
-  }
-
-  .searchbar .input {
-    max-width: 380px;
-  }
-
-  @media (max-width: 700px) {
-    .searchbar .input {
-      max-width: none;
-      flex: 1 1 100%;
-    }
-  }
-
   .pager {
     display: flex;
     align-items: center;
