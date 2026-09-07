@@ -98,18 +98,19 @@ ASGI_APPLICATION = "config.asgi.application"
 # --------------------------------------------------------------------------
 DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
 if DATABASE_URL:
-    # Railway's private network (*.railway.internal) does not terminate TLS, so
-    # forcing sslmode=require there fails to connect. Public/managed hosts like
-    # Render do need it. Auto-detect, and allow an explicit override.
-    ssl_default = not DEBUG and ".railway.internal" not in DATABASE_URL
     DATABASES = {
         "default": dj_database_url.parse(
-            DATABASE_URL,
-            conn_max_age=600,
-            conn_health_checks=True,
-            ssl_require=env_bool("DATABASE_SSL_REQUIRE", ssl_default),
+            DATABASE_URL, conn_max_age=600, conn_health_checks=True
         )
     }
+    # TLS mode. "require" fails outright against a server that does not offer
+    # SSL - which is the case for Railway Postgres over its private network,
+    # while managed hosts reached over the internet do offer it. "prefer"
+    # encrypts whenever the server supports it and connects either way, so one
+    # setting is correct on both. Set DATABASE_SSL_REQUIRE=True to insist.
+    if "sslmode" not in DATABASE_URL:
+        sslmode = "require" if env_bool("DATABASE_SSL_REQUIRE", False) else "prefer"
+        DATABASES["default"].setdefault("OPTIONS", {})["sslmode"] = sslmode
 else:
     DATABASES = {
         "default": {

@@ -1,0 +1,21 @@
+# Keep the build context small and the image clean.
+.git
+.gitignore
+.shots
+
+# The frontend deploys to Vercel, not into this image.
+frontend/
+BSIT-4-School-Annoucement-System-main/
+
+# Local-only backend artefacts.
+backend/.venv/
+backend/.env
+backend/db.sqlite3
+backend/media/
+backend/staticfiles/
+**/__pycache__/
+**/*.py[cod]
+
+# Docs and other platform configs.
+README.md
+render.yaml

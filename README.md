@@ -284,14 +284,15 @@ service's **Settings**:
 
 | Setting | Value |
 |---|---|
-| Root Directory | `backend` |
+| Root Directory | leave as `/` (the root Dockerfile handles it) |
 | Networking → Public Networking | **Generate Domain** |
 
-Build and start commands, the healthcheck, and the migration step are read from
-[`backend/railway.json`](backend/railway.json), so you do not type them in.
-Migrations and `ensure_admin` run as a **pre-deploy** step — after the build,
-before traffic switches over — which means a failed migration stops the release
-instead of half-applying it.
+Leave **Root Directory** at its default (`/`). The repo root holds a
+[`Dockerfile`](Dockerfile) that builds the API, and [`railway.json`](railway.json)
+supplies the healthcheck and the migration step — so a freshly created service
+builds correctly with nothing to configure. Migrations and `ensure_admin` run as
+a **pre-deploy** step (after the build, before traffic switches over), so a
+failed migration stops the release instead of half-applying it.
 
 **3. Set the variables** on the API service (**Variables** tab):
 
@@ -416,6 +417,9 @@ config, not on visitor input. Re-run `npm audit` after adapter updates.
 ## Project layout
 
 ```
+Dockerfile             builds the API image (used by Railway)
+railway.json           healthcheck + pre-deploy migrations
+
 backend/
   config/              settings, urls, wsgi/asgi
   announcements/
@@ -429,7 +433,6 @@ backend/
     exceptions.py      uniform { detail, errors } error envelope
     tests.py           22 tests
     management/commands/ensure_admin.py
-  railway.json         Railway build, pre-deploy migrations, start command
   build.sh             Render build: install, collectstatic, migrate, ensure_admin
 
 frontend/
