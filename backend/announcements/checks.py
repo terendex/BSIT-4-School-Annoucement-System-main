@@ -49,6 +49,32 @@ def cloudinary_configured_in_production(app_configs, **kwargs):
     ]
 
 
+def _sqlite_hint() -> str:
+    """Say which of the two ways DATABASE_URL went missing actually happened."""
+    raw = getattr(settings, "DATABASE_URL_RAW", "")
+
+    if "${{" in raw or "${" in raw:
+        return (
+            "DATABASE_URL is set to the literal text {!r} - the platform did "
+            "not substitute it. On Railway the name inside the reference is the "
+            "database SERVICE name: if your Postgres service is not called "
+            "'Postgres', the reference must match whatever it is called.".format(raw)
+        )
+
+    if raw and not raw.strip():
+        return "DATABASE_URL is set but contains only whitespace."
+
+    return (
+        "DATABASE_URL is empty or unset on this service. On Railway, add the "
+        "Postgres database, then set DATABASE_URL on THIS service to "
+        "${{Postgres.DATABASE_URL}} - and check the name inside those braces "
+        "matches your database service exactly, because a reference that does "
+        "not resolve is delivered as an empty string with no warning. Pasting "
+        "the database's own DATABASE_URL value literally works too. To run a "
+        "production-mode container on SQLite anyway, set DJANGO_DEBUG=True."
+    )
+
+
 @register()
 def database_is_persistent_in_production(app_configs, **kwargs):
     """Refuse to run production against SQLite inside the container.
@@ -72,12 +98,7 @@ def database_is_persistent_in_production(app_configs, **kwargs):
         Error(
             "Running on SQLite in production: every announcement would be lost "
             "on the next deploy, because the file lives inside the container.",
-            hint=(
-                "Set DATABASE_URL on this service to the Postgres reference, "
-                "e.g. ${{Postgres.DATABASE_URL}} on Railway. To run a "
-                "production-mode container on SQLite anyway, set "
-                "DJANGO_DEBUG=True."
-            ),
+            hint=_sqlite_hint(),
             id="announcements.E002",
         )
     ]

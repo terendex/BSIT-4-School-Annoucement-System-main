@@ -5,6 +5,7 @@ from datetime import timedelta
 from pathlib import Path
 
 import dj_database_url
+from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -99,7 +100,30 @@ ASGI_APPLICATION = "config.asgi.application"
 # Database - Postgres in production, SQLite locally when DATABASE_URL is unset
 # --------------------------------------------------------------------------
 DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
+# A platform reference like ${{Postgres.DATABASE_URL}} resolves to an empty
+# string when the service name does not match, which looks identical to
+# "never set". Keep the raw value so the checks can tell them apart.
+DATABASE_URL_RAW = os.getenv("DATABASE_URL", "")
 if DATABASE_URL:
+    # A reference the platform failed to substitute arrives here as literal
+    # text, and dj_database_url reports it as "No support for ''" from three
+    # frames deep - a traceback that says nothing about what to go and fix.
+    if "${" in DATABASE_URL or DATABASE_URL.startswith("<"):
+        raise ImproperlyConfigured(
+            "DATABASE_URL is the literal text {!r}; the platform did not "
+            "substitute it. On Railway the name inside ${{...}} is the database "
+            "SERVICE name - if your Postgres service is not called 'Postgres', "
+            "the reference has to match whatever it is actually called. Pasting "
+            "the database's own DATABASE_URL value literally works too.".format(
+                DATABASE_URL
+            )
+        )
+    if "://" not in DATABASE_URL:
+        raise ImproperlyConfigured(
+            "DATABASE_URL does not look like a connection URL: {!r}. It should "
+            "start with postgres:// (or sqlite:///).".format(DATABASE_URL)
+        )
+
     DATABASES = {
         "default": dj_database_url.parse(
             DATABASE_URL, conn_max_age=600, conn_health_checks=True
