@@ -41,9 +41,13 @@ PLATFORM_HOSTNAMES = [
 ]
 ALLOWED_HOSTS.extend(PLATFORM_HOSTNAMES)
 
-# Railway's internal healthcheck calls the service over its private network.
 if os.getenv("RAILWAY_ENVIRONMENT_NAME"):
+    # Railway reaches the container two ways that are not the public domain:
+    # service-to-service calls over *.railway.internal, and deploy healthchecks
+    # sent with "Host: healthcheck.railway.app". Without both, Django answers
+    # 400 DisallowedHost and the deploy is rolled back as unhealthy.
     ALLOWED_HOSTS.append(".railway.internal")
+    ALLOWED_HOSTS.append("healthcheck.railway.app")
 
 INSTALLED_APPS = [
     "django.contrib.admin",

@@ -113,13 +113,17 @@ copy .env.example .env            # cp .env.example .env  on Git Bash/macOS
 The default `frontend/.env` already points at `http://127.0.0.1:8000`, so it
 works as-is for local use.
 
-**3. Replace the logo**
+**3. The logo** (already done — nothing to do here)
 
-`frontend/public/logo.png` is a **generated placeholder**. Save the real Saint
-Louis College seal over it, keeping the filename — it is used in the header, on
-empty states, and as the Open Graph fallback image. Square, at least 600×600.
-(The placeholder can be regenerated with
-`python frontend/scripts/generate_placeholder_logo.py`.)
+`frontend/public/logo.png` is the Saint Louis College seal, used in the header,
+on empty states, and as the Open Graph fallback image. The original scan lives
+in `frontend/brand/slclogo.jpg` and is *not* deployed.
+
+To swap in a new seal, replace that source file and run
+`python frontend/scripts/build_logo.py`. It cleans the scan to navy-on-white and
+writes an 800×800 PNG. If you change `SIZE` in that script, update `LOGO_WIDTH`
+and `LOGO_HEIGHT` in `src/lib/config.ts` to match — they are sent as
+`og:image:width`/`height`, and Facebook trusts those tags over the real file.
 
 ### Every time — start the system
 
@@ -436,6 +440,7 @@ frontend/
       admin/           Modal, LoginModal, AnnouncementModal,
                        AttachmentsModal, ConfirmModal, AdminDashboard
     pages/             index.astro, a/[slug].astro, admin/index.astro, 404.astro
-  public/              logo.png (replace me), favicon.svg, robots.txt
-  scripts/             placeholder logo generator
+  public/              logo.png (the seal), favicon.svg, robots.txt
+  brand/               slclogo.jpg - original scan, not deployed
+  scripts/             build_logo.py - regenerates public/logo.png
 ```
