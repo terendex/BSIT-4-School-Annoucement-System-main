@@ -96,7 +96,12 @@ export interface Publisher {
   password_changed_at: string | null;
   last_login: string | null;
   announcement_count: number;
-  /** Only present on the response that created the invite. */
+  /** Only present on the response that created or resent the invite. */
   invite_email_sent?: boolean;
   detail?: string;
+  /**
+   * Returned ONLY when the invite email failed, so the admin can pass the
+   * password on another way instead of being left with a dead account.
+   */
+  temporary_password?: string;
 }

@@ -499,7 +499,7 @@ class PublisherViewSet(viewsets.ViewSet):
             )
             password = issue_temp_password(profile)
 
-        delivered = send_invite_email(
+        delivered, reason = send_invite_email(
             email=email,
             password=password,
             expires_at=profile.temp_password_expires_at,
@@ -507,15 +507,19 @@ class PublisherViewSet(viewsets.ViewSet):
             full_name=full_name,
         )
 
-        data = PublisherSerializer(
-            self.get_queryset().get(pk=user.pk)
-        ).data
+        data = PublisherSerializer(self.get_queryset().get(pk=user.pk)).data
         data["invite_email_sent"] = delivered
         if not delivered:
             data["detail"] = (
-                "The account was created but the invite email could not be sent. "
-                "Check the mail settings, then use Resend invite."
+                "The account was created, but the invite email could not be "
+                "sent. " + reason
             )
+            # Without this the account is simply dead: nobody knows the
+            # password, and resending would fail the same way. Handing it to
+            # the admin who just created it - over the connection they are
+            # already authenticated on - lets them pass it along another way.
+            # It is never logged, and never returned when delivery worked.
+            data["temporary_password"] = password
         return Response(
             data,
             status=status.HTTP_201_CREATED if delivered else status.HTTP_207_MULTI_STATUS,
@@ -562,19 +566,23 @@ class PublisherViewSet(viewsets.ViewSet):
         profile = profile_for(user)
         password = issue_temp_password(profile)
 
-        delivered = send_invite_email(
+        delivered, reason = send_invite_email(
             email=user.email or user.username,
             password=password,
             expires_at=profile.temp_password_expires_at,
             inviter=request.user,
             full_name=profile.full_name,
         )
+
+        data = PublisherSerializer(self.get_queryset().get(pk=user.pk)).data
+        data["invite_email_sent"] = delivered
         if not delivered:
-            return Response(
-                {"detail": "Could not send the email. Check the mail settings."},
-                status=status.HTTP_502_BAD_GATEWAY,
-            )
-        return Response(PublisherSerializer(self.get_queryset().get(pk=user.pk)).data)
+            # The password has already been rotated, so the old one is dead
+            # whatever happens next. Hand the new one over rather than leaving
+            # the account unreachable.
+            data["detail"] = "The password was reset, but the email failed. " + reason
+            data["temporary_password"] = password
+        return Response(data)
 
     def _get_managed_user(self, request, pk):
         """The target account, with the rules an admin cannot talk their way past."""

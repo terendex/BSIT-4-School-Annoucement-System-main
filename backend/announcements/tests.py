@@ -1106,3 +1106,116 @@ class DatabaseUrlOptionsTests(TestCase):
             self.options_for("postgres://u:p@h:5432/db?sslmode=require").get("sslmode"),
             "require",
         )
+
+
+@override_settings(EMAIL_BACKEND=LOCMEM_EMAIL)
+class InviteDeliveryFailureTests(RoleTestCase):
+    """What happens when the mail server will not take the message.
+
+    The account exists the moment it is created, so a failed email must not
+    leave it stranded: nobody would know the password, and resending would
+    fail exactly the same way.
+    """
+
+    def invite(self, email="unlucky@gmail.test"):
+        self.as_user("admin", ADMIN_PASSWORD)
+        return self.client.post(
+            reverse("publisher-list"), {"email": email, "full_name": "Un Lucky"},
+            format="json",
+        )
+
+    def test_a_blocked_port_is_reported_as_such(self):
+        with mock.patch(
+            "announcements.emails.EmailMultiAlternatives.send",
+            side_effect=TimeoutError("timed out"),
+        ):
+            response = self.invite()
+
+        self.assertEqual(response.status_code, 207)
+        self.assertFalse(response.data["invite_email_sent"])
+        detail = response.data["detail"]
+        self.assertIn("Could not reach", detail)
+        self.assertIn("blocking outbound SMTP", detail)
+
+    def test_bad_credentials_are_reported_as_such(self):
+        import smtplib
+
+        with mock.patch(
+            "announcements.emails.EmailMultiAlternatives.send",
+            side_effect=smtplib.SMTPAuthenticationError(535, b"nope"),
+        ):
+            response = self.invite()
+
+        self.assertIn("App Password", response.data["detail"])
+        # Wrong credentials must not be described as a blocked port.
+        self.assertNotIn("blocking outbound SMTP", response.data["detail"])
+
+    def test_the_admin_gets_the_password_so_the_account_is_not_dead(self):
+        with mock.patch(
+            "announcements.emails.EmailMultiAlternatives.send",
+            side_effect=TimeoutError("timed out"),
+        ):
+            response = self.invite()
+
+        password = response.data.get("temporary_password")
+        self.assertTrue(password, "no fallback password was returned")
+
+        # And it genuinely works.
+        self.logout()
+        cache.clear()
+        signed_in = self.sign_in("unlucky@gmail.test", password)
+        self.assertEqual(signed_in.status_code, 200)
+        self.assertTrue(signed_in.data["user"]["must_change_password"])
+
+    def test_the_password_is_never_returned_when_the_email_worked(self):
+        response = self.invite()
+        self.assertEqual(response.status_code, 201)
+        self.assertTrue(response.data["invite_email_sent"])
+        self.assertNotIn("temporary_password", response.data)
+
+    def test_a_failed_resend_also_hands_the_password_over(self):
+        self.invite()
+        user = User.objects.get(email="unlucky@gmail.test")
+        with mock.patch(
+            "announcements.emails.EmailMultiAlternatives.send",
+            side_effect=TimeoutError("timed out"),
+        ):
+            response = self.client.post(reverse("publisher-resend-invite", args=[user.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.data["invite_email_sent"])
+        self.assertTrue(response.data.get("temporary_password"))
+
+    def test_a_successful_resend_returns_no_password(self):
+        self.invite()
+        user = User.objects.get(email="unlucky@gmail.test")
+        response = self.client.post(reverse("publisher-resend-invite", args=[user.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["invite_email_sent"])
+        self.assertNotIn("temporary_password", response.data)
+
+    def test_the_password_never_reaches_the_log(self):
+        with mock.patch(
+            "announcements.emails.EmailMultiAlternatives.send",
+            side_effect=TimeoutError("timed out"),
+        ):
+            with self.assertLogs("announcements.emails", level="ERROR") as captured:
+                response = self.invite()
+
+        password = response.data["temporary_password"]
+        self.assertNotIn(password, "\\n".join(captured.output))
+
+
+@override_settings(EMAIL_BACKEND="django.core.mail.backends.console.EmailBackend")
+class ConsoleBackendIsNotDeliveryTests(RoleTestCase):
+    def test_printing_to_the_console_does_not_count_as_sent(self):
+        # Otherwise the dashboard reports success while the password goes to
+        # the deploy log and the invitee receives nothing.
+        self.as_user("admin", ADMIN_PASSWORD)
+        response = self.client.post(
+            reverse("publisher-list"), {"email": "nowhere@gmail.test"}, format="json"
+        )
+        self.assertEqual(response.status_code, 207)
+        self.assertFalse(response.data["invite_email_sent"])
+        self.assertIn("not configured", response.data["detail"])
+        self.assertTrue(response.data.get("temporary_password"))

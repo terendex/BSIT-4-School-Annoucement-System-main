@@ -34,6 +34,10 @@ export default function PublishersModal({ currentUserId, onClose }: Props) {
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState<Publisher | null>(null);
   const [resetting, setResetting] = useState<Publisher | null>(null);
+  /** Shown only when the email failed - the way back from a dead account. */
+  const [fallback, setFallback] = useState<{ email: string; password: string } | null>(
+    null
+  );
 
   const load = async () => {
     setLoading(true);
@@ -68,6 +72,9 @@ export default function PublishersModal({ currentUserId, onClose }: Props) {
           created.detail ??
             "The account was created but the invite email could not be sent."
         );
+        if (created.temporary_password) {
+          setFallback({ email: created.email, password: created.temporary_password });
+        }
       } else {
         setNotice(`Invite sent to ${created.email}.`);
       }
@@ -79,14 +86,22 @@ export default function PublishersModal({ currentUserId, onClose }: Props) {
     }
   };
 
-  const act = async (action: () => Promise<unknown>, message: string) => {
+  const act = async (action: () => Promise<Publisher | unknown>, message: string) => {
     setBusy(true);
     setError("");
     setNotice("");
+    setFallback(null);
     try {
-      await action();
+      const result = (await action()) as Publisher | undefined;
       await load();
-      setNotice(message);
+      if (result && result.invite_email_sent === false) {
+        setError(result.detail ?? "The email could not be sent.");
+        if (result.temporary_password) {
+          setFallback({ email: result.email, password: result.temporary_password });
+        }
+      } else {
+        setNotice(message);
+      }
     } catch (err) {
       setError((err as ApiError).message || "That did not work.");
     } finally {
@@ -151,6 +166,24 @@ export default function PublishersModal({ currentUserId, onClose }: Props) {
 
         {error && <p className="alert alert--error">{error}</p>}
         {notice && <p className="alert alert--success">{notice}</p>}
+
+        {fallback && (
+          <div className="alert alert--info">
+            <p style={{ margin: "0 0 8px" }}>
+              <strong>Give this to {fallback.email} yourself.</strong> It works
+              once, and they will be asked to set their own password straight
+              after. It is not shown again.
+            </p>
+            <input
+              className="input"
+              type="text"
+              value={fallback.password}
+              readOnly
+              onFocus={(event) => event.target.select()}
+              aria-label="Temporary password"
+            />
+          </div>
+        )}
 
         {loading ? (
           <p className="field__hint">Loading...</p>

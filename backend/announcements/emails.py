@@ -5,6 +5,7 @@ mail is not configured the console backend prints the message instead, so local
 development works without credentials and nothing silently pretends to send.
 """
 import logging
+import socket
 
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
@@ -50,11 +51,54 @@ signs in with the password above.</p>
 """
 
 
-def send_invite_email(*, email, password, expires_at, inviter=None, full_name="") -> bool:
-    """Mail one publisher their temporary password. True when it was accepted.
+# Turns the exception a mail server raises into something an admin can act on.
+# The distinction that matters most: credentials rejected (fixable by changing a
+# variable) versus the connection never opening at all (the host is blocking
+# outbound SMTP, and no amount of fiddling with the password will help).
+#
+# Order matters here. smtplib.SMTPException subclasses OSError, so the
+# connection case has to be tested last or it swallows every other SMTP error.
+def _explain(error) -> str:
+    name = type(error).__name__
+    detail = str(error).strip()
 
-    The caller decides what a False means; the invite itself is already saved,
-    so an admin can resend rather than the account being lost.
+    if name == "SMTPAuthenticationError":
+        return (
+            "Gmail rejected the credentials. EMAIL_HOST_PASSWORD must be a "
+            "16-character Google App Password with no spaces, generated for the "
+            "account named in EMAIL_HOST_USER."
+        )
+    if name == "SMTPRecipientsRefused":
+        return "The mail server refused that recipient address."
+    if name == "SMTPSenderRefused":
+        return (
+            "The mail server refused the sender address. DEFAULT_FROM_EMAIL has "
+            "to be the same account as EMAIL_HOST_USER."
+        )
+    if name in {"SMTPServerDisconnected", "SMTPConnectError"} or isinstance(
+        error, (TimeoutError, ConnectionRefusedError, socket.gaierror, socket.timeout)
+    ):
+        return (
+            "Could not reach {}:{} at all ({}). That is usually the host "
+            "blocking outbound SMTP rather than anything wrong with your "
+            "credentials - Railway and similar platforms block those ports by "
+            "default. An HTTP email API (Resend, Brevo, SendGrid) is the way "
+            "around it, since those send over HTTPS.".format(
+                settings.EMAIL_HOST, settings.EMAIL_PORT, name
+            )
+        )
+    return "{}: {}".format(name, detail[:200]) if detail else name
+
+
+def send_invite_email(*, email, password, expires_at, inviter=None, full_name=""):
+    """Mail one publisher their temporary password.
+
+    Returns (delivered, reason). The reason is empty on success and, on
+    failure, says what an admin should go and change - a bare "could not be
+    sent" leaves them with nothing to do but guess.
+
+    The invite itself is already saved either way, so a failure means resend,
+    not a lost account.
     """
     login_url = "{}/login".format(settings.FRONTEND_ORIGIN.rstrip("/"))
     inviter_label = "An admin"
@@ -87,12 +131,26 @@ def send_invite_email(*, email, password, expires_at, inviter=None, full_name=""
     )
     message.attach_alternative(_HTML_BODY.format(**html_fields), "text/html")
 
+    if "console" in settings.EMAIL_BACKEND:
+        # The console backend would "succeed" while printing the password to
+        # the deploy log and delivering nothing.
+        logger.error("Invite for %s not sent: email is not configured", email)
+        return False, (
+            "Email is not configured on the server. Set EMAIL_HOST_USER and "
+            "EMAIL_HOST_PASSWORD, then redeploy."
+        )
+
     try:
         # The password is in the body; it must never reach a log line.
         sent = message.send(fail_silently=False)
-    except Exception:
-        logger.exception("Invite email to %s could not be sent", email)
-        return False
+    except Exception as error:
+        reason = _explain(error)
+        # exc_info, not the message - the body must stay out of the log.
+        logger.error("Invite email to %s failed: %s", email, reason, exc_info=True)
+        return False, reason
+
     if not sent:
         logger.error("Invite email to %s was not accepted by the mail server", email)
-    return bool(sent)
+        return False, "The mail server accepted the connection but sent nothing."
+
+    return True, ""
