@@ -1,0 +1,97 @@
+{
+  "exported_at": "2026-09-08T03:56:55.800996",
+  "source": "https://announcements-api-production-58f8.up.railway.app",
+  "count": 2,
+  "announcements": [
+    {
+      "id": 2,
+      "title": "NOTICE! Incoming Collection of ₱100 for SITS members ship fee",
+      "slug": "notice-incoming-collection-of-100-for-sits-members-ship-fee",
+      "excerpt": "NOTICE! A collection of ₱100 will be made once the go signal is given. Please stay tuned for further updates.",
+      "published": true,
+      "cover_image": {
+        "id": 2,
+        "kind": "image",
+        "url": "https://res.cloudinary.com/dsurmbjr/image/upload/v1788796687/announcements/images/slc_announcement-8d009745.png",
+        "original_filename": "slc_announcement.png",
+        "content_type": "image/png",
+        "size": 51608,
+        "width": 1200,
+        "height": 1200,
+        "caption": "",
+        "order": 0,
+        "created_at": "2026-09-07T23:58:08.447912+08:00"
+      },
+      "image_count": 1,
+      "file_count": 0,
+      "source_page": "",
+      "source_page_name": "",
+      "source_url": "",
+      "published_at": "2026-09-07T23:58:06.856638+08:00",
+      "created_at": "2026-09-07T23:58:06.856765+08:00",
+      "updated_at": "2026-09-07T23:58:06.856772+08:00",
+      "body": "**NOTICE!** A collection of ₱100 will be made once the go signal is given. Please stay tuned for further updates.",
+      "images": [
+        {
+          "id": 2,
+          "kind": "image",
+          "url": "https://res.cloudinary.com/dsurmbjr/image/upload/v1788796687/announcements/images/slc_announcement-8d009745.png",
+          "original_filename": "slc_announcement.png",
+          "content_type": "image/png",
+          "size": 51608,
+          "width": 1200,
+          "height": 1200,
+          "caption": "",
+          "order": 0,
+          "created_at": "2026-09-07T23:58:08.447912+08:00"
+        }
+      ],
+      "files": []
+    },
+    {
+      "id": 1,
+      "title": "Schedule of Exam",
+      "slug": "schedule-of-exam",
+      "excerpt": "Here is the schedule exam for the prelims. Don't forget to secure your Exam permits and blue books thank you :DD",
+      "published": true,
+      "cover_image": {
+        "id": 1,
+        "kind": "image",
+        "url": "https://res.cloudinary.com/dsurmbjr/image/upload/v1788773663/announcements/images/Screenshot-2026-09-07-150921-ed6cfce0.png",
+        "original_filename": "Screenshot-2026-09-07-150921.png",
+        "content_type": "image/png",
+        "size": 15319,
+        "width": 668,
+        "height": 201,
+        "caption": "",
+        "order": 0,
+        "created_at": "2026-09-07T17:34:23.996931+08:00"
+      },
+      "image_count": 1,
+      "file_count": 0,
+      "source_page": "slcRegistrar",
+      "source_page_name": "SLC Registrar",
+      "source_url": "https://www.facebook.com/share/p/1T9fMj7PgM/",
+      "published_at": "2026-09-07T17:34:22.972314+08:00",
+      "created_at": "2026-09-07T17:34:22.972487+08:00",
+      "updated_at": "2026-09-07T17:34:22.972495+08:00",
+      "body": "Here is the schedule exam for the prelims. Don't forget to secure your Exam permits and blue books thank you :DD",
+      "images": [
+        {
+          "id": 1,
+          "kind": "image",
+          "url": "https://res.cloudinary.com/dsurmbjr/image/upload/v1788773663/announcements/images/Screenshot-2026-09-07-150921-ed6cfce0.png",
+          "original_filename": "Screenshot-2026-09-07-150921.png",
+          "content_type": "image/png",
+          "size": 15319,
+          "width": 668,
+          "height": 201,
+          "caption": "",
+          "order": 0,
+          "created_at": "2026-09-07T17:34:23.996931+08:00"
+        }
+      ],
+      "files": []
+    }
+  ]
+}

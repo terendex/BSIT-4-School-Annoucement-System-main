@@ -110,7 +110,12 @@ if DATABASE_URL:
     # while managed hosts reached over the internet do offer it. "prefer"
     # encrypts whenever the server supports it and connects either way, so one
     # setting is correct on both. Set DATABASE_SSL_REQUIRE=True to insist.
-    if "sslmode" not in DATABASE_URL:
+    # Postgres only: sqlite3 and mysql reject an sslmode connection argument
+    # outright, which made a sqlite:/// DATABASE_URL - handy for a one-off
+    # restore or a throwaway copy - fail to connect at all.
+    if DATABASES["default"].get("ENGINE", "").endswith(
+        ("postgresql", "postgresql_psycopg2")
+    ) and "sslmode" not in DATABASE_URL:
         sslmode = "require" if env_bool("DATABASE_SSL_REQUIRE", False) else "prefer"
         DATABASES["default"].setdefault("OPTIONS", {})["sslmode"] = sslmode
 else:

@@ -1,14 +1,20 @@
 import io
 import json
+import pathlib
 import re
 import sys
 import tempfile
 from unittest import mock
 
+import dj_database_url
+
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from django.core import checks, mail
 from django.core.cache import cache
+from django.core.management import call_command
+from django.core.management.base import CommandError
+from django.utils.dateparse import parse_datetime
 from django.utils import timezone
 from django.test import TestCase, override_settings
 from django.urls import reverse
@@ -16,6 +22,7 @@ from PIL import Image
 from rest_framework.test import APIClient
 
 from .checks import database_is_persistent_in_production
+from .management.commands.import_announcements import public_id_from
 from .models import Announcement, Attachment, Profile, unique_slug
 from .passwords import generate_temp_password
 
@@ -937,3 +944,165 @@ class InviteEdgeCaseTests(RoleTestCase):
             self.assertEqual(
                 response.status_code, 400, f"throttled on attempt {attempt + 1}"
             )
+
+
+class RestoreCommandTests(TestCase):
+    """Putting announcements back after the database was swapped underneath.
+
+    The service ran on container-local SQLite, so its posts were reachable only
+    through the public API of the container still holding them. These commands
+    are the bridge from that export to a real database.
+    """
+
+    BACKUP = {
+        "exported_at": "2026-09-08T03:56:55",
+        "count": 1,
+        "announcements": [
+            {
+                "id": 2,
+                "title": "NOTICE! Collection of ₱100",
+                "slug": "notice-collection",
+                "body": "**NOTICE!** A collection will be made.",
+                "published": True,
+                "published_at": "2026-09-07T23:58:06.856638+08:00",
+                "created_at": "2026-09-07T23:58:06.856765+08:00",
+                "category": "event",
+                "year_level": "3",
+                "source_page": "",
+                "source_url": "",
+                "images": [
+                    {
+                        "url": "https://res.cloudinary.com/dsurmbjr/image/upload/v1788796687/announcements/images/slc_announcement-8d009745.png",
+                        "original_filename": "slc_announcement.png",
+                        "content_type": "image/png",
+                        "size": 51608,
+                        "width": 1200,
+                        "height": 1200,
+                        "caption": "",
+                        "order": 0,
+                    }
+                ],
+                "files": [],
+            }
+        ],
+    }
+
+    def setUp(self):
+        self.directory = tempfile.mkdtemp(prefix="announcement-restore-")
+        self.path = pathlib.Path(self.directory) / "backup.json"
+        self.path.write_text(json.dumps(self.BACKUP), encoding="utf-8")
+
+    def run_import(self, *args):
+        out = io.StringIO()
+        call_command("import_announcements", str(self.path), *args, stdout=out)
+        return out.getvalue()
+
+    def test_public_id_is_recovered_from_a_cloudinary_url(self):
+        # Not part of the export, but a later delete needs it to remove the
+        # file from Cloudinary rather than orphaning it.
+        self.assertEqual(
+            public_id_from(
+                "https://res.cloudinary.com/dsurmbjr/image/upload/v1788796687/"
+                "announcements/images/slc_announcement-8d009745.png"
+            ),
+            "announcements/images/slc_announcement-8d009745",
+        )
+
+    def test_public_id_survives_a_url_without_a_version(self):
+        self.assertEqual(
+            public_id_from(
+                "https://res.cloudinary.com/x/image/upload/announcements/images/a.jpg"
+            ),
+            "announcements/images/a",
+        )
+
+    def test_a_non_cloudinary_url_has_no_public_id(self):
+        self.assertEqual(public_id_from("http://localhost:8000/media/a.png"), "")
+
+    def test_the_announcement_comes_back_whole(self):
+        self.run_import()
+        announcement = Announcement.objects.get(slug="notice-collection")
+        self.assertEqual(announcement.title, "NOTICE! Collection of ₱100")
+        self.assertEqual(announcement.body, "**NOTICE!** A collection will be made.")
+        self.assertEqual(announcement.category, "event")
+        self.assertEqual(announcement.year_level, "3")
+        self.assertTrue(announcement.published)
+
+    def test_the_original_publish_date_is_kept(self):
+        # save() would otherwise stamp published_at with "now" and shuffle the
+        # board out of its real order.
+        self.run_import()
+        announcement = Announcement.objects.get(slug="notice-collection")
+        self.assertEqual(
+            announcement.published_at, parse_datetime("2026-09-07T23:58:06.856638+08:00")
+        )
+
+    def test_the_image_is_relinked_not_reuploaded(self):
+        self.run_import()
+        attachment = Attachment.objects.get()
+        self.assertEqual(attachment.kind, "image")
+        self.assertIn("res.cloudinary.com", attachment.url)
+        self.assertEqual(
+            attachment.public_id, "announcements/images/slc_announcement-8d009745"
+        )
+        self.assertEqual(attachment.storage_backend, Attachment.Backend.CLOUDINARY)
+        self.assertEqual(attachment.size, 51608)
+
+    def test_running_it_twice_does_not_duplicate(self):
+        self.run_import()
+        output = self.run_import()
+        self.assertEqual(Announcement.objects.count(), 1)
+        self.assertIn("already present", output)
+
+    def test_a_dry_run_writes_nothing(self):
+        output = self.run_import("--dry-run")
+        self.assertEqual(Announcement.objects.count(), 0)
+        self.assertIn("would restore", output.lower())
+
+    def test_a_missing_file_is_a_clean_error(self):
+        with self.assertRaises(CommandError):
+            call_command("import_announcements", str(self.path) + ".nope")
+
+    def test_a_malformed_file_is_a_clean_error(self):
+        self.path.write_text("not json at all", encoding="utf-8")
+        with self.assertRaises(CommandError):
+            call_command("import_announcements", str(self.path))
+
+    def test_export_round_trips_through_the_local_database(self):
+        self.run_import()
+        out = pathlib.Path(self.directory) / "again.json"
+        call_command("export_announcements", "--out", str(out), stdout=io.StringIO())
+
+        payload = json.loads(out.read_text(encoding="utf-8"))
+        self.assertEqual(payload["count"], 1)
+        self.assertEqual(payload["announcements"][0]["slug"], "notice-collection")
+        self.assertEqual(len(payload["announcements"][0]["images"]), 1)
+
+
+class DatabaseUrlOptionsTests(TestCase):
+    """sslmode is a Postgres connection argument and nothing else's.
+
+    Applying it to every DATABASE_URL made a sqlite:/// URL - the obvious way
+    to restore into a throwaway copy - fail to connect at all.
+    """
+
+    def options_for(self, url):
+        config = dj_database_url.parse(url)
+        engine = config.get("ENGINE", "")
+        if engine.endswith(("postgresql", "postgresql_psycopg2")) and "sslmode" not in url:
+            config.setdefault("OPTIONS", {})["sslmode"] = "prefer"
+        return config.get("OPTIONS", {})
+
+    def test_postgres_gets_an_sslmode(self):
+        self.assertEqual(
+            self.options_for("postgres://u:p@host:5432/db").get("sslmode"), "prefer"
+        )
+
+    def test_sqlite_does_not(self):
+        self.assertNotIn("sslmode", self.options_for("sqlite:////tmp/copy.sqlite3"))
+
+    def test_an_explicit_sslmode_is_not_overwritten(self):
+        self.assertEqual(
+            self.options_for("postgres://u:p@h:5432/db?sslmode=require").get("sslmode"),
+            "require",
+        )
