@@ -1,13 +1,17 @@
 import io
+import sys
 import tempfile
+from unittest import mock
 
 from django.contrib.auth import get_user_model
+from django.core import checks
 from django.core.cache import cache
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from PIL import Image
 from rest_framework.test import APIClient
 
+from .checks import database_is_persistent_in_production
 from .models import Announcement, Attachment, unique_slug
 
 User = get_user_model()
@@ -353,3 +357,50 @@ class AttachmentModelTests(TestCase):
             original_filename="b.png", order=1,
         )
         self.assertEqual(announcement.cover_image.original_filename, "b.png")
+
+
+class DatabasePersistenceCheckTests(TestCase):
+    """A production deploy must never come up on a throwaway SQLite file.
+
+    The check is what keeps announcements alive across deploys: it has to be an
+    ERROR, because `manage.py migrate` aborts on one and the start command runs
+    gunicorn behind it, so the bad deploy fails and the old one keeps serving.
+
+    Every test pins sys.argv, since the check deliberately stands down for
+    commands that are not a live deployment - including the test runner itself.
+    """
+
+    SQLITE = {
+        "default": {"ENGINE": "django.db.backends.sqlite3", "NAME": ":memory:"}
+    }
+    POSTGRES = {
+        "default": {"ENGINE": "django.db.backends.postgresql", "NAME": "announcements"}
+    }
+
+    def run_check(self, argv=("manage.py", "migrate", "--no-input")):
+        with mock.patch.object(sys, "argv", list(argv)):
+            return database_is_persistent_in_production(None)
+
+    @override_settings(DEBUG=False, DATABASES=SQLITE)
+    def test_sqlite_in_production_is_a_hard_error(self):
+        issues = self.run_check()
+        self.assertEqual([issue.id for issue in issues], ["announcements.E002"])
+        self.assertEqual(issues[0].level, checks.ERROR)
+
+    @override_settings(DEBUG=False, DATABASES=POSTGRES)
+    def test_postgres_in_production_passes(self):
+        self.assertEqual(self.run_check(), [])
+
+    @override_settings(DEBUG=True, DATABASES=SQLITE)
+    def test_local_development_on_sqlite_is_left_alone(self):
+        self.assertEqual(self.run_check(), [])
+
+    @override_settings(DEBUG=False, DATABASES=SQLITE)
+    def test_image_build_step_is_left_alone(self):
+        # The Dockerfile runs collectstatic with DJANGO_DEBUG=False and no
+        # database; firing here would break the build, not a bad deploy.
+        self.assertEqual(self.run_check(("manage.py", "collectstatic")), [])
+
+    @override_settings(DEBUG=False, DATABASES=SQLITE)
+    def test_the_test_runner_is_left_alone(self):
+        self.assertEqual(self.run_check(("manage.py", "test")), [])
