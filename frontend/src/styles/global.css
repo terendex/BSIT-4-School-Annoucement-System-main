@@ -612,6 +612,39 @@ h3 {
   line-height: 1.55;
 }
 
+/* Password field with a reveal toggle sitting inside it. */
+.field__with-button {
+  position: relative;
+  display: block;
+}
+
+.field__with-button .input {
+  /* Room for the button so long passwords do not run underneath it. */
+  padding-right: 46px;
+}
+
+.field__reveal {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  transform: translateY(-50%);
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.field__reveal:hover {
+  color: var(--navy-700);
+  background: var(--navy-50);
+}
+
 .checkbox {
   display: flex;
   align-items: center;
