@@ -17,7 +17,7 @@ from rest_framework_simplejwt.views import TokenRefreshView
 from .emails import send_invite_email
 from .models import Announcement, Attachment, Profile, profile_for
 from .pagination import StandardPagination
-from .passwords import generate_temp_password
+from .passwords import generate_invite_token, hash_invite_token, tokens_match
 from .permissions import CanEditAnnouncement, IsAdmin, IsStaffMember, is_admin
 from .serializers import (
     AnnouncementDetailSerializer,
@@ -26,6 +26,7 @@ from .serializers import (
     AttachmentSerializer,
     AttachmentUpdateSerializer,
     AttachmentUploadSerializer,
+    AcceptInviteSerializer,
     ChangePasswordSerializer,
     InviteSerializer,
     LoginSerializer,
@@ -104,7 +105,7 @@ class LoginView(APIView):
             )
 
         profile = profile_for(user)
-        if profile.temp_password_expired:
+        if profile.invite_expired:
             logger.info("Expired invite used for %r", identifier)
             return Response(
                 {
@@ -132,6 +133,87 @@ class MeView(APIView):
         if not request.user.is_staff:
             return Response(status=status.HTTP_403_FORBIDDEN)
         return Response(UserSerializer(request.user).data)
+
+
+def find_invited_user(token: str):
+    """The account an invite token belongs to, if the token is still good.
+
+    Returns (user, error). Every failure gives the same message: a token that
+    is unknown, spent, or expired should be indistinguishable from outside.
+    """
+    token = (token or "").strip()
+    if not token:
+        return None, "This invite link is not valid."
+
+    expired = "This invite link has expired. Ask an admin to send you a new one."
+    invalid = "This invite link is not valid. It may already have been used."
+
+    for profile in Profile.objects.filter(
+        must_change_password=True
+    ).exclude(invite_token_hash="").select_related("user"):
+        if tokens_match(token, profile.invite_token_hash):
+            if profile.invite_expired:
+                return None, expired
+            if not profile.user.is_active:
+                return None, invalid
+            return profile.user, ""
+    return None, invalid
+
+
+class InviteDetailView(APIView):
+    """Is this invite link still good, and who is it for?
+
+    Lets the page greet the right person and show a clear message for a spent
+    or expired link, instead of failing only once they submit a password.
+    """
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+    throttle_scope = "login"
+
+    def get(self, request, token):
+        user, error = find_invited_user(token)
+        if user is None:
+            return Response({"detail": error}, status=status.HTTP_404_NOT_FOUND)
+        profile = profile_for(user)
+        return Response(
+            {
+                "email": user.email or user.username,
+                "full_name": profile.full_name,
+                "expires_at": profile.invite_expires_at,
+            }
+        )
+
+
+class AcceptInviteView(APIView):
+    """Spend an invite link: the publisher chooses their own password.
+
+    This is the only moment the account gets a usable password, and it is
+    chosen by its owner. Nobody else ever sees it.
+    """
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+    throttle_scope = "login"
+
+    def post(self, request):
+        token = (request.data.get("token") or "").strip()
+        user, error = find_invited_user(token)
+        if user is None:
+            return Response({"detail": error}, status=status.HTTP_400_BAD_REQUEST)
+
+        serializer = AcceptInviteSerializer(
+            data=request.data, context={"request": request, "invited_user": user}
+        )
+        serializer.is_valid(raise_exception=True)
+
+        user.set_password(serializer.validated_data["new_password"])
+        user.save(update_fields=["password"])
+        # Clears the token, so the link cannot be replayed.
+        profile_for(user).clear_invite()
+
+        logger.info("Invite accepted for user id %s", user.id)
+        return Response(issue_tokens(user))
 
 
 class ChangePasswordView(APIView):
@@ -162,17 +244,8 @@ class ChangePasswordView(APIView):
         user.set_password(serializer.validated_data["new_password"])
         user.save(update_fields=["password"])
 
-        profile = profile_for(user)
-        profile.must_change_password = False
-        profile.temp_password_expires_at = None
-        profile.password_changed_at = timezone.now()
-        profile.save(
-            update_fields=[
-                "must_change_password",
-                "temp_password_expires_at",
-                "password_changed_at",
-            ]
-        )
+        # Also retires any invite link still outstanding for this account.
+        profile_for(user).clear_invite()
 
         logger.info("Password changed for user id %s", user.id)
         # Hand back a fresh pair so the caller is not bounced to the login
@@ -425,26 +498,40 @@ class AdminAttachmentDetailView(generics.RetrieveUpdateDestroyAPIView):
 # --------------------------------------------------------------------------
 # Publishers (admin only)
 # --------------------------------------------------------------------------
-def issue_temp_password(profile) -> str:
-    """Give this account a fresh single-use password and return it.
+def issue_invite(profile) -> str:
+    """Start a fresh invite and return the link to hand out.
 
-    Returned to the caller only so it can be put in the email. It is stored
-    hashed like any other password and never written to a log or a response.
+    The account is left with no usable password at all. The only way in is the
+    returned link, which carries a single-use token; the publisher opens it and
+    chooses their own password. That way nobody - not the admin who sent it,
+    not a mail server, not a chat log - ever holds their credential.
+
+    Issuing a new invite invalidates any previous one.
     """
-    password = generate_temp_password()
+    token = generate_invite_token()
     user = profile.user
-    user.set_password(password)
+    user.set_unusable_password()
     user.save(update_fields=["password"])
 
     profile.must_change_password = True
-    profile.temp_password_expires_at = timezone.now() + timezone.timedelta(
+    profile.invite_token_hash = hash_invite_token(token)
+    profile.invite_expires_at = timezone.now() + timezone.timedelta(
         days=settings.INVITE_EXPIRY_DAYS
     )
     profile.invited_at = timezone.now()
     profile.save(
-        update_fields=["must_change_password", "temp_password_expires_at", "invited_at"]
+        update_fields=[
+            "must_change_password",
+            "invite_token_hash",
+            "invite_expires_at",
+            "invited_at",
+        ]
     )
-    return password
+    return invite_url(token)
+
+
+def invite_url(token: str) -> str:
+    return "{}/invite/{}".format(settings.FRONTEND_ORIGIN.rstrip("/"), token)
 
 
 class PublisherViewSet(viewsets.ViewSet):
@@ -497,29 +584,27 @@ class PublisherViewSet(viewsets.ViewSet):
                 full_name=full_name,
                 invited_by=request.user,
             )
-            password = issue_temp_password(profile)
+            link = issue_invite(profile)
 
         delivered, reason = send_invite_email(
             email=email,
-            password=password,
-            expires_at=profile.temp_password_expires_at,
+            link=link,
+            expires_at=profile.invite_expires_at,
             inviter=request.user,
             full_name=full_name,
         )
 
         data = PublisherSerializer(self.get_queryset().get(pk=user.pk)).data
         data["invite_email_sent"] = delivered
+        # The link is a setup URL, not a credential: it lets its holder choose
+        # a password, it works once, and it expires. An admin is meant to be
+        # able to pass it on by hand when email is unavailable.
+        data["invite_url"] = link
         if not delivered:
             data["detail"] = (
                 "The account was created, but the invite email could not be "
                 "sent. " + reason
             )
-            # Without this the account is simply dead: nobody knows the
-            # password, and resending would fail the same way. Handing it to
-            # the admin who just created it - over the connection they are
-            # already authenticated on - lets them pass it along another way.
-            # It is never logged, and never returned when delivery worked.
-            data["temporary_password"] = password
         return Response(
             data,
             status=status.HTTP_201_CREATED if delivered else status.HTTP_207_MULTI_STATUS,
@@ -564,24 +649,21 @@ class PublisherViewSet(viewsets.ViewSet):
         """
         user = self._get_managed_user(request, pk)
         profile = profile_for(user)
-        password = issue_temp_password(profile)
+        link = issue_invite(profile)
 
         delivered, reason = send_invite_email(
             email=user.email or user.username,
-            password=password,
-            expires_at=profile.temp_password_expires_at,
+            link=link,
+            expires_at=profile.invite_expires_at,
             inviter=request.user,
             full_name=profile.full_name,
         )
 
         data = PublisherSerializer(self.get_queryset().get(pk=user.pk)).data
         data["invite_email_sent"] = delivered
+        data["invite_url"] = link
         if not delivered:
-            # The password has already been rotated, so the old one is dead
-            # whatever happens next. Hand the new one over rather than leaving
-            # the account unreachable.
-            data["detail"] = "The password was reset, but the email failed. " + reason
-            data["temporary_password"] = password
+            data["detail"] = "The link was created, but the email failed. " + reason
         return Response(data)
 
     def _get_managed_user(self, request, pk):

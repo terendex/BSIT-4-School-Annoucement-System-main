@@ -43,14 +43,16 @@ class Command(BaseCommand):
         profile = profile_for(user)
         profile.role = Profile.Role.ADMIN
         profile.must_change_password = False
-        profile.temp_password_expires_at = None
+        profile.invite_token_hash = ""
+        profile.invite_expires_at = None
         if profile.password_changed_at is None:
             profile.password_changed_at = timezone.now()
         profile.save(
             update_fields=[
                 "role",
                 "must_change_password",
-                "temp_password_expires_at",
+                "invite_token_hash",
+                "invite_expires_at",
                 "password_changed_at",
             ]
         )

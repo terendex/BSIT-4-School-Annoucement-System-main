@@ -239,12 +239,16 @@ class Profile(models.Model):
     )
     full_name = models.CharField(max_length=150, blank=True)
 
-    # Set when an invite is issued and cleared the moment the publisher picks
-    # their own password. While true the API allows nothing but the change.
+    # True from the moment an invite is issued until the publisher has set
+    # their own password. While true the account has no usable password at all.
     must_change_password = models.BooleanField(default=False)
-    # A temporary password is a credential sitting in an inbox; it should not
-    # work forever if the invite is never opened.
-    temp_password_expires_at = models.DateTimeField(null=True, blank=True)
+
+    # SHA-256 of the outstanding invite token. The token itself only ever
+    # exists in the link that is handed out; losing this row means the link
+    # stops working, which is the intended failure mode.
+    invite_token_hash = models.CharField(max_length=64, blank=True)
+    # A live invite link should not stay usable for ever.
+    invite_expires_at = models.DateTimeField(null=True, blank=True)
 
     invited_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -267,10 +271,25 @@ class Profile(models.Model):
         return self.role == self.Role.ADMIN
 
     @property
-    def temp_password_expired(self) -> bool:
-        if not self.must_change_password or self.temp_password_expires_at is None:
+    def invite_expired(self) -> bool:
+        if not self.must_change_password or self.invite_expires_at is None:
             return False
-        return timezone.now() >= self.temp_password_expires_at
+        return timezone.now() >= self.invite_expires_at
+
+    def clear_invite(self):
+        """Called once the publisher has set a password. The link dies here."""
+        self.must_change_password = False
+        self.invite_token_hash = ""
+        self.invite_expires_at = None
+        self.password_changed_at = timezone.now()
+        self.save(
+            update_fields=[
+                "must_change_password",
+                "invite_token_hash",
+                "invite_expires_at",
+                "password_changed_at",
+            ]
+        )
 
 
 def profile_for(user) -> "Profile":

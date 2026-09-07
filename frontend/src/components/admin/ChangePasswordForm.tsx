@@ -2,7 +2,8 @@ import { useMemo, useState } from "react";
 import { ApiError, changePassword } from "../../lib/adminClient";
 import type { AdminUser } from "../../lib/types";
 import { LOGO_PATH, SITE_NAME } from "../../lib/config";
-import { CheckIcon, DotIcon, EyeIcon, EyeOffIcon } from "./icons";
+import PasswordRules, { allRulesMet } from "./PasswordRules";
+import { EyeIcon, EyeOffIcon } from "./icons";
 
 interface Props {
   user: AdminUser;
@@ -11,36 +12,6 @@ interface Props {
   onChanged: (user: AdminUser) => void;
   onCancel?: () => void;
 }
-
-/**
- * The rules, mirrored from the server so they can be shown as you type.
- *
- * The server is still the authority - announcements/passwords.py and Django's
- * own validators decide - but a checklist that fills in beats submitting three
- * times to discover the rules one error at a time.
- */
-const RULES: { label: string; test: (value: string, user: AdminUser) => boolean }[] = [
-  { label: "At least 10 characters", test: (value) => value.length >= 10 },
-  { label: "An uppercase letter", test: (value) => /[A-Z]/.test(value) },
-  { label: "A lowercase letter", test: (value) => /[a-z]/.test(value) },
-  { label: "A number", test: (value) => /[0-9]/.test(value) },
-  {
-    label: "A symbol, for example ! ? # @",
-    test: (value) => /[^A-Za-z0-9]/.test(value),
-  },
-  {
-    label: "Not your name or email",
-    test: (value, user) => {
-      if (value.length < 4) return false;
-      const lowered = value.toLowerCase();
-      const parts = [user.email.split("@")[0], user.username, user.full_name]
-        .filter(Boolean)
-        .map((part) => part.toLowerCase())
-        .filter((part) => part.length >= 4);
-      return !parts.some((part) => lowered.includes(part));
-    },
-  },
-];
 
 export default function ChangePasswordForm({ user, forced, onChanged, onCancel }: Props) {
   const [current, setCurrent] = useState("");
@@ -51,13 +22,12 @@ export default function ChangePasswordForm({ user, forced, onChanged, onCancel }
   const [problems, setProblems] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
 
-  const results = useMemo(
-    () => RULES.map((rule) => ({ label: rule.label, ok: rule.test(next, user) })),
-    [next, user]
+  const who = useMemo(
+    () => ({ email: user.email, username: user.username, full_name: user.full_name }),
+    [user]
   );
-  const allRulesMet = results.every((rule) => rule.ok);
   const matches = next.length > 0 && next === confirm;
-  const canSubmit = Boolean(current) && allRulesMet && matches && !busy;
+  const canSubmit = Boolean(current) && allRulesMet(next, who) && matches && !busy;
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -138,17 +108,7 @@ export default function ChangePasswordForm({ user, forced, onChanged, onCancel }
           </span>
         </label>
 
-        <ul className="rule-list" aria-label="Password requirements">
-          {results.map((rule) => (
-            <li
-              key={rule.label}
-              className={rule.ok ? "rule-list__item rule-list__item--ok" : "rule-list__item"}
-            >
-              <span className="rule-list__icon">{rule.ok ? <CheckIcon /> : <DotIcon />}</span>
-              {rule.label}
-            </li>
-          ))}
-        </ul>
+        <PasswordRules password={next} who={who} />
 
         <label className="field">
           <span className="field__label">Confirm new password</span>

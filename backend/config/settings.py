@@ -227,18 +227,32 @@ EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "").strip()
 EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
 EMAIL_USE_TLS = env_bool("EMAIL_USE_TLS", True)
 EMAIL_TIMEOUT = int(os.getenv("EMAIL_TIMEOUT", "20"))
-EMAIL_ENABLED = bool(EMAIL_HOST_USER and EMAIL_HOST_PASSWORD)
 
-if EMAIL_ENABLED:
+# Brevo over HTTPS, preferred when a key is present.
+#
+# Container hosts generally block outbound SMTP - on Railway the symptom is
+# "OSError: [Errno 101] Network is unreachable" against port 587, which no
+# credential can fix. Brevo's HTTP API goes over 443 and works from there.
+# The key must be an API key (xkeysib-...), not an SMTP key (xsmtpsib-...).
+BREVO_API_KEY = os.getenv("BREVO_API_KEY", "").strip()
+
+SMTP_CONFIGURED = bool(EMAIL_HOST_USER and EMAIL_HOST_PASSWORD)
+EMAIL_ENABLED = bool(BREVO_API_KEY or SMTP_CONFIGURED)
+
+if BREVO_API_KEY:
+    EMAIL_BACKEND = "announcements.mail_backends.BrevoAPIBackend"
+elif SMTP_CONFIGURED:
     EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
 else:
-    # No credentials: print invites to the console instead of failing. Local
-    # development works, and announcements.checks warns if this happens live.
+    # Nothing configured: print invites to the console rather than failing.
+    # Local development works, and announcements.checks warns if this is live.
     EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 
+# Brevo requires the sender to be an address verified in the account.
+EMAIL_SENDER = os.getenv("EMAIL_SENDER", "").strip() or EMAIL_HOST_USER
 DEFAULT_FROM_EMAIL = os.getenv(
     "DEFAULT_FROM_EMAIL",
-    "{} <{}>".format(SITE_NAME, EMAIL_HOST_USER) if EMAIL_HOST_USER else "webmaster@localhost",
+    "{} <{}>".format(SITE_NAME, EMAIL_SENDER) if EMAIL_SENDER else "webmaster@localhost",
 )
 
 # How long a mailed temporary password stays usable.

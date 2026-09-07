@@ -1,0 +1,24 @@
+---
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import AcceptInvite from "../../components/admin/AcceptInvite.tsx";
+
+const { token } = Astro.params;
+---
+
+<BaseLayout
+  title="Set your password"
+  description="Finish setting up your publisher account."
+  canonicalPath={`/invite/${token}`}
+  noindex={true}
+>
+  <!-- client:only - the token is checked and spent from the browser, and there
+       is no session on the server to render against. -->
+  <AcceptInvite token={token ?? ""} client:only="react" />
+
+  <noscript>
+    <p class="alert alert--error">
+      Setting your password needs JavaScript. Open this link in a normal browser
+      tab and it will work.
+    </p>
+  </noscript>
+</BaseLayout>

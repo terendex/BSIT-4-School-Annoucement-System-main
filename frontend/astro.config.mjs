@@ -16,6 +16,13 @@ import vercel from "@astrojs/vercel";
 // it runs the actual Vercel output and needs no change to this file.
 export default defineConfig({
   output: "server",
+  // Without a CSS target the minifier assumes a modern browser and rewrites
+  // "(max-width: 700px)" into Media Queries Level 4 range syntax,
+  // "(width <= 700px)". Safari only understands that from 16.4, so every
+  // mobile rule would be skipped on an older phone - the layout would fall
+  // back to the desktop table on exactly the devices that need it least.
+  // This is a CSS-output setting only; it does not touch module resolution.
+  vite: { build: { cssTarget: ["chrome87", "safari13", "firefox78", "edge88"] } },
   adapter: vercel({ webAnalytics: { enabled: false } }),
   site: process.env.PUBLIC_SITE_URL || "http://localhost:4321",
   integrations: [react()],

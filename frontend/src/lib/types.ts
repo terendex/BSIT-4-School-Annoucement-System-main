@@ -100,8 +100,9 @@ export interface Publisher {
   invite_email_sent?: boolean;
   detail?: string;
   /**
-   * Returned ONLY when the invite email failed, so the admin can pass the
-   * password on another way instead of being left with a dead account.
+   * The setup link for an outstanding invite. Not a credential: it lets its
+   * holder choose a password, works once, and expires - so an admin can pass
+   * it on by hand when email is unavailable.
    */
-  temporary_password?: string;
+  invite_url?: string;
 }

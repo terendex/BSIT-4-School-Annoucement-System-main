@@ -304,13 +304,17 @@ h3 {
 }
 
 .tag {
+  display: inline-block;
   background: var(--navy-50);
   border: 1px solid var(--navy-100);
   color: var(--navy-700);
   border-radius: 999px;
-  padding: 2px 9px;
+  padding: 3px 10px;
   font-size: 0.76rem;
   font-weight: 600;
+  line-height: 1.45;
+  /* A two-word label like "Exam schedule" belongs on one line. */
+  white-space: nowrap;
 }
 
 .tag--draft {
@@ -1093,4 +1097,54 @@ h3 {
 .field-row > .field {
   flex: 1 1 220px;
   min-width: 0;
+}
+
+/* Delete sitting in a row beside Edit and Files does not deserve a solid red
+   fill - it pulled the eye straight to the one action nobody wants to hit by
+   accident. Quiet until you reach for it, unmistakable once you do. Solid
+   .btn--danger is kept for the confirmation dialog, where it IS the intent. */
+.btn--danger-quiet {
+  background: transparent;
+  color: var(--danger);
+  border-color: var(--line);
+}
+
+.btn--danger-quiet:hover:not(:disabled),
+.btn--danger-quiet:focus-visible {
+  background: var(--danger-soft);
+  border-color: #e8b4af;
+  color: #7d1a14;
+}
+
+/* An input paired with a Copy button - the invite link handover. */
+.copy-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.copy-row .input {
+  font-family: "Cascadia Mono", Consolas, "SF Mono", Menlo, monospace;
+  font-size: 0.82rem;
+  /* Without this the input refuses to shrink below its intrinsic width and
+     pushes the Copy button off a narrow screen. */
+  flex: 1 1 200px;
+  min-width: 0;
+}
+
+.copy-row .btn {
+  flex: none;
+}
+
+@media (max-width: 700px), (pointer: coarse) {
+  /* This selector outranks the generic .input rule above, so the 16px that
+     stops iOS zooming on focus has to be restated here. */
+  .copy-row .input {
+    font-size: 16px;
+  }
+
+  .copy-row .btn {
+    flex: 1 1 100%;
+  }
 }

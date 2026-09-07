@@ -198,6 +198,7 @@ export default function AdminDashboard() {
           <button type="button" className="btn" onClick={() => setDialog({ type: "create" })}>
             New announcement
           </button>
+          <span className="admin-bar__divider" aria-hidden="true" />
           {isAdmin && (
             <button
               type="button"
@@ -334,7 +335,7 @@ export default function AdminDashboard() {
                         {announcement.file_count === 1 ? "" : "s"}
                       </span>
                     </td>
-                    <td data-label="Filed under">
+                    <td className="admin-table__filed" data-label="Filed under">
                       <span className={`tag tag--${toneFor(taxonomy, announcement.category)}`}>
                         {announcement.category_name}
                       </span>
@@ -394,7 +395,7 @@ export default function AdminDashboard() {
                         {isAdmin && (
                           <button
                             type="button"
-                            className="btn btn--sm btn--danger"
+                            className="btn btn--sm btn--danger-quiet"
                             onClick={() => setDialog({ type: "delete", announcement })}
                           >
                             Delete

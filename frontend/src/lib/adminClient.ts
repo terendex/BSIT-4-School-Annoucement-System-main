@@ -176,6 +176,43 @@ export function signOut(): void {
 export const fetchMe = () => request<AdminUser>("/api/auth/me/");
 
 // --------------------------------------------------------------------------
+// Invite links (unauthenticated - the token is the credential)
+// --------------------------------------------------------------------------
+export interface InviteDetail {
+  email: string;
+  full_name: string;
+  expires_at: string | null;
+}
+
+/** Who an invite link belongs to, and whether it is still good. */
+export async function fetchInvite(token: string): Promise<InviteDetail> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/auth/invite/${encodeURIComponent(token)}/`,
+    { headers: { Accept: "application/json" } }
+  );
+  if (!response.ok) throw await parseError(response);
+  return (await response.json()) as InviteDetail;
+}
+
+/**
+ * Spend an invite link. The account gets its first usable password here, set
+ * by its owner, and the response signs them in.
+ */
+export async function acceptInvite(token: string, newPassword: string): Promise<AdminUser> {
+  const response = await fetch(`${API_BASE_URL}/api/auth/accept-invite/`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token, new_password: newPassword }),
+  });
+  if (!response.ok) throw await parseError(response);
+
+  const data = await response.json();
+  accessToken = data.access;
+  writeRefresh(data.refresh);
+  return data.user as AdminUser;
+}
+
+// --------------------------------------------------------------------------
 // Announcements
 // --------------------------------------------------------------------------
 export interface AdminListFilters {

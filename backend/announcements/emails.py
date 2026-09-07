@@ -5,6 +5,7 @@ mail is not configured the console backend prints the message instead, so local
 development works without credentials and nothing silently pretends to send.
 """
 import logging
+import smtplib
 import socket
 
 from django.conf import settings
@@ -19,45 +20,104 @@ _TEXT_BODY = """Hi{greeting_name},
 
 {inviter} added you as a publisher on {site}, so you can post announcements.
 
-    Sign in at: {login_url}
-    Email:      {email}
-    Temporary password: {password}
+Open this link to choose your password and finish setting up:
 
-This temporary password works once and expires on {expires}. You will be asked
-to set your own password as soon as you sign in.
+{link}
 
-Please do not forward this email. If you were not expecting it, you can ignore
-it - the account cannot be used until someone signs in with the password above.
+The link works once and expires on {expires}. Nobody else - including the admin
+who invited you - can see the password you choose.
+
+Please do not forward this email. If you were not expecting it you can ignore
+it; the account cannot be used until someone opens the link above.
 
 - {site}
 """
 
+# A 600px table that collapses to full width on a phone, inline styles only,
+# and a tap target comfortably over the 44px minimum. The raw link is repeated
+# below the button with word-break, because plenty of clients strip buttons -
+# and an unbreakable 80-character URL is what blows out an email on a phone.
 _HTML_BODY = """\
-<p>Hi{greeting_name},</p>
-<p><strong>{inviter}</strong> added you as a publisher on {site}, so you can post
-announcements.</p>
-<table cellpadding="8" style="border-collapse:collapse;background:#f4f6fb;border-radius:8px">
-  <tr><td>Sign in at</td><td><a href="{login_url}">{login_url}</a></td></tr>
-  <tr><td>Email</td><td><code>{email}</code></td></tr>
-  <tr><td>Temporary password</td>
-      <td><code style="font-size:1.1em"><strong>{password}</strong></code></td></tr>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>{subject}</title>
+</head>
+<body style="margin:0;padding:0;background:#f6f7fb;
+  -webkit-text-size-adjust:100%;-ms-text-size-adjust:100%">
+
+<!-- Preview text: what shows in the inbox list before opening. -->
+<div style="display:none;max-height:0;overflow:hidden;opacity:0">
+  Choose your password to finish setting up your {site} account.
+</div>
+
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+  style="background:#f6f7fb;padding:16px 12px">
+<tr><td align="center">
+
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0"
+    style="width:100%;max-width:600px;background:#ffffff;border-radius:12px;
+    border:1px solid #dcdfee;font-family:'Segoe UI',system-ui,-apple-system,
+    Helvetica,Arial,sans-serif;color:#14172b">
+
+    <tr><td style="height:4px;background:#1f2a6b;border-radius:12px 12px 0 0;
+      font-size:0;line-height:0">&nbsp;</td></tr>
+
+    <tr><td style="padding:26px 24px 8px">
+      <p style="margin:0 0 4px;font-size:12px;letter-spacing:.06em;
+        text-transform:uppercase;font-weight:700;color:#5a6080">{site}</p>
+      <h1 style="margin:0;font-size:22px;line-height:1.25;color:#10173d">
+        You can post announcements</h1>
+    </td></tr>
+
+    <tr><td style="padding:14px 24px 0;font-size:16px;line-height:1.6">
+      <p style="margin:0 0 14px">Hi{greeting_name},</p>
+      <p style="margin:0"><strong>{inviter}</strong> added you as a publisher on
+      {site}. Choose a password and you are in.</p>
+    </td></tr>
+
+    <tr><td style="padding:24px 24px 6px">
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+      <tr><td align="center" bgcolor="#1f2a6b" style="border-radius:8px">
+        <a href="{link}" style="display:block;padding:15px 24px;font-size:16px;
+          font-weight:600;color:#ffffff;text-decoration:none;border-radius:8px">
+          Choose your password</a>
+      </td></tr>
+      </table>
+    </td></tr>
+
+    <tr><td style="padding:14px 24px 0;font-size:13px;line-height:1.6;color:#5a6080">
+      <p style="margin:0 0 6px">Or paste this into your browser:</p>
+      <p style="margin:0;word-break:break-all;overflow-wrap:break-word">
+        <a href="{link}" style="color:#2b3888">{link}</a></p>
+    </td></tr>
+
+    <tr><td style="padding:20px 24px 0;font-size:14px;line-height:1.6">
+      <p style="margin:0">The link works once and expires on
+      <strong>{expires}</strong>. Nobody else - including the admin who invited
+      you - can see the password you choose.</p>
+    </td></tr>
+
+    <tr><td style="padding:18px 24px 26px">
+      <p style="margin:0;padding-top:16px;border-top:1px solid #dcdfee;
+        font-size:12px;line-height:1.6;color:#5a6080">
+        Please do not forward this email. If you were not expecting it you can
+        ignore it - the account cannot be used until someone opens the link.
+      </p>
+    </td></tr>
+
+  </table>
+
+</td></tr>
 </table>
-<p>This temporary password works once and expires on <strong>{expires}</strong>.
-You will be asked to set your own password as soon as you sign in.</p>
-<p style="color:#666;font-size:.9em">Please do not forward this email. If you were
-not expecting it you can ignore it - the account cannot be used until someone
-signs in with the password above.</p>
-<p style="color:#666;font-size:.9em">- {site}</p>
+</body>
+</html>
 """
 
 
-# Turns the exception a mail server raises into something an admin can act on.
-# The distinction that matters most: credentials rejected (fixable by changing a
-# variable) versus the connection never opening at all (the host is blocking
-# outbound SMTP, and no amount of fiddling with the password will help).
-#
-# Order matters here. smtplib.SMTPException subclasses OSError, so the
-# connection case has to be tested last or it swallows every other SMTP error.
 def _explain(error) -> str:
     name = type(error).__name__
     detail = str(error).strip()
@@ -75,9 +135,10 @@ def _explain(error) -> str:
             "The mail server refused the sender address. DEFAULT_FROM_EMAIL has "
             "to be the same account as EMAIL_HOST_USER."
         )
-    if name in {"SMTPServerDisconnected", "SMTPConnectError"} or isinstance(
-        error, (TimeoutError, ConnectionRefusedError, socket.gaierror, socket.timeout)
-    ):
+    unreachable = isinstance(error, OSError) and not isinstance(
+        error, smtplib.SMTPException
+    )
+    if name in {"SMTPServerDisconnected", "SMTPConnectError"} or unreachable:
         return (
             "Could not reach {}:{} at all ({}). That is usually the host "
             "blocking outbound SMTP rather than anything wrong with your "
@@ -90,8 +151,8 @@ def _explain(error) -> str:
     return "{}: {}".format(name, detail[:200]) if detail else name
 
 
-def send_invite_email(*, email, password, expires_at, inviter=None, full_name=""):
-    """Mail one publisher their temporary password.
+def send_invite_email(*, email, link, expires_at, inviter=None, full_name=""):
+    """Mail one publisher the link that lets them set their own password.
 
     Returns (delivered, reason). The reason is empty on success and, on
     failure, says what an admin should go and change - a bare "could not be
@@ -100,7 +161,6 @@ def send_invite_email(*, email, password, expires_at, inviter=None, full_name=""
     The invite itself is already saved either way, so a failure means resend,
     not a lost account.
     """
-    login_url = "{}/login".format(settings.FRONTEND_ORIGIN.rstrip("/"))
     inviter_label = "An admin"
     if inviter is not None:
         inviter_label = (
@@ -113,15 +173,15 @@ def send_invite_email(*, email, password, expires_at, inviter=None, full_name=""
         "greeting_name": " " + full_name.split()[0] if full_name.strip() else "",
         "inviter": inviter_label,
         "site": settings.SITE_NAME,
-        "login_url": login_url,
-        "email": email,
-        "password": password,
+        "subject": SUBJECT.format(site=settings.SITE_NAME),
+        "link": link,
         "expires": expires_at.strftime("%d %b %Y, %I:%M %p"),
     }
     html_fields = {key: escape(str(value)) for key, value in fields.items()}
-    # The href is built from our own FRONTEND_ORIGIN, so it is safe unescaped;
-    # everything else - including the invitee's own name - is not.
-    html_fields["login_url"] = login_url
+    # The href is built from our own FRONTEND_ORIGIN plus a token we generated,
+    # so it is safe unescaped; everything else - the invitee's own name most of
+    # all - is not.
+    html_fields["link"] = link
 
     message = EmailMultiAlternatives(
         subject=SUBJECT.format(site=settings.SITE_NAME),
@@ -141,7 +201,7 @@ def send_invite_email(*, email, password, expires_at, inviter=None, full_name=""
         )
 
     try:
-        # The password is in the body; it must never reach a log line.
+        # The body carries a live invite link; it must never reach a log line.
         sent = message.send(fail_silently=False)
     except Exception as error:
         reason = _explain(error)

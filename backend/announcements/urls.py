@@ -15,6 +15,11 @@ urlpatterns = [
     path("auth/me/", views.MeView.as_view(), name="me"),
     path("auth/change-password/", views.ChangePasswordView.as_view(),
          name="change-password"),
+    # Invite links: check one, then spend it.
+    path("auth/invite/<str:token>/", views.InviteDetailView.as_view(),
+         name="invite-detail"),
+    path("auth/accept-invite/", views.AcceptInviteView.as_view(),
+         name="accept-invite"),
 
     # --- public, read-only ---
     path("announcements/", views.PublicAnnouncementListView.as_view(),

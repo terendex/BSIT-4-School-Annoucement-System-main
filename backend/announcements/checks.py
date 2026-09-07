@@ -119,9 +119,11 @@ def email_configured_in_production(app_configs, **kwargs):
             "Email is not configured; publisher invites will not be delivered "
             "and the temporary password will be written to the deploy log.",
             hint=(
-                "Set EMAIL_HOST_USER to the Gmail address and "
-                "EMAIL_HOST_PASSWORD to a Google App Password "
-                "(myaccount.google.com/apppasswords)."
+                "Set BREVO_API_KEY to a Brevo API key (xkeysib-...) and "
+                "EMAIL_SENDER to a verified sender address. Most hosts block "
+                "outbound SMTP, so Gmail's EMAIL_HOST_USER / "
+                "EMAIL_HOST_PASSWORD will not work on Railway - the HTTP API "
+                "goes over 443 instead."
             ),
             id="announcements.W003",
         )

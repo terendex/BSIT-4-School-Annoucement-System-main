@@ -261,6 +261,23 @@ class ChangePasswordSerializer(serializers.Serializer):
         return attrs
 
 
+class AcceptInviteSerializer(serializers.Serializer):
+    """Set a password using an invite link, with no old password to supply."""
+
+    token = serializers.CharField(max_length=128, trim_whitespace=True)
+    new_password = serializers.CharField(max_length=128, trim_whitespace=False)
+
+    def validate_new_password(self, value):
+        # The user this will belong to, so similarity to their own email is
+        # judged against the right account.
+        user = self.context.get("invited_user")
+        try:
+            validate_password(value, user=user)
+        except DjangoValidationError as error:
+            raise serializers.ValidationError(list(error.messages))
+        return value
+
+
 class UserSerializer(serializers.ModelSerializer):
     """The signed-in account, as the dashboard needs to know it."""
 
@@ -304,7 +321,7 @@ class PublisherSerializer(serializers.ModelSerializer):
         source="profile.must_change_password", read_only=True
     )
     invite_expired = serializers.BooleanField(
-        source="profile.temp_password_expired", read_only=True
+        source="profile.invite_expired", read_only=True
     )
     invited_at = serializers.DateTimeField(source="profile.invited_at", read_only=True)
     password_changed_at = serializers.DateTimeField(

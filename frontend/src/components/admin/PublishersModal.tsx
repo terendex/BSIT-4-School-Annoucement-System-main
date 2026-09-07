@@ -34,10 +34,9 @@ export default function PublishersModal({ currentUserId, onClose }: Props) {
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState<Publisher | null>(null);
   const [resetting, setResetting] = useState<Publisher | null>(null);
-  /** Shown only when the email failed - the way back from a dead account. */
-  const [fallback, setFallback] = useState<{ email: string; password: string } | null>(
-    null
-  );
+  /** The setup link for the invite just issued, for handing over by hand. */
+  const [link, setLink] = useState<{ email: string; url: string } | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -72,11 +71,12 @@ export default function PublishersModal({ currentUserId, onClose }: Props) {
           created.detail ??
             "The account was created but the invite email could not be sent."
         );
-        if (created.temporary_password) {
-          setFallback({ email: created.email, password: created.temporary_password });
-        }
       } else {
         setNotice(`Invite sent to ${created.email}.`);
+      }
+      // Shown either way: handy when the email worked, essential when it did not.
+      if (created.invite_url) {
+        setLink({ email: created.email, url: created.invite_url });
       }
     } catch (err) {
       const apiError = err as ApiError;
@@ -90,17 +90,18 @@ export default function PublishersModal({ currentUserId, onClose }: Props) {
     setBusy(true);
     setError("");
     setNotice("");
-    setFallback(null);
+    setLink(null);
+    setCopied(false);
     try {
       const result = (await action()) as Publisher | undefined;
       await load();
       if (result && result.invite_email_sent === false) {
         setError(result.detail ?? "The email could not be sent.");
-        if (result.temporary_password) {
-          setFallback({ email: result.email, password: result.temporary_password });
-        }
       } else {
         setNotice(message);
+      }
+      if (result && result.invite_url) {
+        setLink({ email: result.email, url: result.invite_url });
       }
     } catch (err) {
       setError((err as ApiError).message || "That did not work.");
@@ -167,21 +168,39 @@ export default function PublishersModal({ currentUserId, onClose }: Props) {
         {error && <p className="alert alert--error">{error}</p>}
         {notice && <p className="alert alert--success">{notice}</p>}
 
-        {fallback && (
+        {link && (
           <div className="alert alert--info">
             <p style={{ margin: "0 0 8px" }}>
-              <strong>Give this to {fallback.email} yourself.</strong> It works
-              once, and they will be asked to set their own password straight
-              after. It is not shown again.
+              <strong>Setup link for {link.email}.</strong> Send it to them any
+              way you like - Messenger is fine. They choose their own password
+              on it, so you never see their credential. It works once and
+              expires.
             </p>
-            <input
-              className="input"
-              type="text"
-              value={fallback.password}
-              readOnly
-              onFocus={(event) => event.target.select()}
-              aria-label="Temporary password"
-            />
+            <div className="copy-row">
+              <input
+                className="input"
+                type="text"
+                value={link.url}
+                readOnly
+                onFocus={(event) => event.target.select()}
+                aria-label="Invite link"
+              />
+              <button
+                type="button"
+                className="btn btn--sm"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(link.url);
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 2000);
+                  } catch {
+                    setCopied(false);
+                  }
+                }}
+              >
+                {copied ? "Copied" : "Copy"}
+              </button>
+            </div>
           </div>
         )}
 
@@ -189,7 +208,7 @@ export default function PublishersModal({ currentUserId, onClose }: Props) {
           <p className="field__hint">Loading...</p>
         ) : (
           <div className="table-scroll" style={{ marginTop: "16px" }}>
-            <table className="admin-table">
+            <table className="admin-table admin-table--compact">
               <thead>
                 <tr>
                   <th>Account</th>
@@ -269,7 +288,7 @@ export default function PublishersModal({ currentUserId, onClose }: Props) {
                               </button>
                               <button
                                 type="button"
-                                className="btn btn--sm btn--danger"
+                                className="btn btn--sm btn--danger-quiet"
                                 disabled={busy}
                                 onClick={() => setConfirming(publisher)}
                               >

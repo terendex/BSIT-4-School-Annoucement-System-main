@@ -24,7 +24,7 @@ from rest_framework.test import APIClient
 from .checks import database_is_persistent_in_production
 from .management.commands.import_announcements import public_id_from
 from .models import Announcement, Attachment, Profile, unique_slug
-from .passwords import generate_temp_password
+from .passwords import generate_invite_token, hash_invite_token, tokens_match
 
 User = get_user_model()
 
@@ -569,6 +569,13 @@ class PublisherPermissionTests(RoleTestCase):
 
 @override_settings(EMAIL_BACKEND=LOCMEM_EMAIL)
 class InviteFlowTests(RoleTestCase):
+    """Invites are links, not passwords.
+
+    The point of the whole design: the publisher's password is chosen by the
+    publisher and known to nobody else. Not the admin who sent the invite, not
+    the mail server, not whatever chat window the link was pasted into.
+    """
+
     def invite(self, email="maria@gmail.test", full_name="Maria Santos"):
         self.as_user("admin", ADMIN_PASSWORD)
         return self.client.post(
@@ -576,104 +583,141 @@ class InviteFlowTests(RoleTestCase):
             format="json",
         )
 
-    def temp_password_from_email(self):
-        """Pull the generated password back out of the invite that was sent."""
-        self.assertEqual(len(mail.outbox), 1, "no invite email was sent")
-        body = mail.outbox[0].body
-        match = re.search(r"Temporary password: (\S+)", body)
-        self.assertIsNotNone(match, body)
-        return match.group(1)
+    def token_from(self, response):
+        return response.data["invite_url"].rstrip("/").rsplit("/", 1)[-1]
 
-    def test_admin_invites_a_publisher_and_the_email_goes_out(self):
+    def test_inviting_sends_a_link_and_creates_no_password(self):
         response = self.invite()
         self.assertEqual(response.status_code, 201, response.data)
-        self.assertEqual(response.data["role"], "publisher")
-        self.assertTrue(response.data["must_change_password"])
         self.assertTrue(response.data["invite_email_sent"])
-        self.assertEqual(len(mail.outbox), 1)
-        self.assertEqual(mail.outbox[0].to, ["maria@gmail.test"])
-
-    def test_the_generated_password_is_never_in_the_api_response(self):
-        response = self.invite()
-        password = self.temp_password_from_email()
-        self.assertNotIn(password, json.dumps(response.data))
-
-    def test_invited_publisher_signs_in_and_is_forced_to_change(self):
-        self.invite()
-        password = self.temp_password_from_email()
-        self.logout()
-
-        signed_in = self.as_user("maria@gmail.test", password)
-        self.assertTrue(signed_in["user"]["must_change_password"])
-
-        # Holding only a temporary password, every other endpoint is shut.
-        self.assertEqual(self.client.get(reverse("admin-announcement-list")).status_code, 403)
-        posting = self.client.post(
-            reverse("admin-announcement-list"), {"title": "Sneaky"}, format="json"
-        )
-        self.assertEqual(posting.status_code, 403)
-
-    def test_changing_the_password_opens_the_dashboard(self):
-        self.invite()
-        password = self.temp_password_from_email()
-        self.logout()
-        self.as_user("maria@gmail.test", password)
-
-        changed = self.client.post(
-            reverse("change-password"),
-            {"current_password": password, "new_password": "Maria-Sept-2026!"},
-            format="json",
-        )
-        self.assertEqual(changed.status_code, 200, changed.data)
-        self.assertFalse(changed.data["user"]["must_change_password"])
-
-        # The response carries fresh tokens, so there is no bounce to /login.
-        self.client.credentials(HTTP_AUTHORIZATION="Bearer " + changed.data["access"])
-        self.assertEqual(self.client.get(reverse("admin-announcement-list")).status_code, 200)
-
-    def test_the_temporary_password_stops_working_after_the_change(self):
-        self.invite()
-        password = self.temp_password_from_email()
-        self.logout()
-        self.as_user("maria@gmail.test", password)
-        self.client.post(
-            reverse("change-password"),
-            {"current_password": password, "new_password": "Maria-Sept-2026!"},
-            format="json",
-        )
-        self.logout()
-        cache.clear()
-        self.assertEqual(self.sign_in("maria@gmail.test", password).status_code, 401)
-        self.assertEqual(self.sign_in("maria@gmail.test", "Maria-Sept-2026!").status_code, 200)
-
-    def test_an_expired_invite_is_refused_with_an_explanation(self):
-        self.invite()
-        password = self.temp_password_from_email()
-        self.logout()
-
-        profile = Profile.objects.get(user__email="maria@gmail.test")
-        profile.temp_password_expires_at = timezone.now() - timezone.timedelta(minutes=1)
-        profile.save(update_fields=["temp_password_expires_at"])
-
-        response = self.sign_in("maria@gmail.test", password)
-        self.assertEqual(response.status_code, 403)
-        self.assertIn("expired", response.data["detail"].lower())
-
-    def test_resending_an_invite_replaces_the_old_password(self):
-        self.invite()
-        first = self.temp_password_from_email()
-        mail.outbox = []
+        self.assertIn("/invite/", response.data["invite_url"])
 
         user = User.objects.get(email="maria@gmail.test")
-        resend = self.client.post(reverse("publisher-resend-invite", args=[user.pk]))
-        self.assertEqual(resend.status_code, 200, resend.data)
-        second = self.temp_password_from_email()
+        self.assertFalse(user.has_usable_password())
 
-        self.assertNotEqual(first, second)
+    def test_no_password_is_ever_returned_to_the_admin(self):
+        response = self.invite()
+        self.assertNotIn("temporary_password", json.dumps(response.data))
+        self.assertNotIn("password", {key.lower() for key in response.data})
+
+    def test_the_email_carries_the_link_and_no_credential(self):
+        response = self.invite()
+        body = mail.outbox[0].body
+        self.assertIn(response.data["invite_url"], body)
+        self.assertNotIn("Temporary password", body)
+
+    def test_the_raw_token_is_never_stored(self):
+        response = self.invite()
+        token = self.token_from(response)
+        profile = Profile.objects.get(user__email="maria@gmail.test")
+        self.assertNotEqual(profile.invite_token_hash, token)
+        self.assertEqual(len(profile.invite_token_hash), 64)
+
+    def test_the_link_says_who_it_is_for(self):
+        token = self.token_from(self.invite())
+        self.logout()
+        response = self.client.get(reverse("invite-detail", args=[token]))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["email"], "maria@gmail.test")
+        self.assertEqual(response.data["full_name"], "Maria Santos")
+
+    def test_accepting_the_invite_signs_them_straight_in(self):
+        token = self.token_from(self.invite())
+        self.logout()
+        response = self.client.post(
+            reverse("accept-invite"),
+            {"token": token, "new_password": "Maria-Sept-2026!"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertFalse(response.data["user"]["must_change_password"])
+        self.assertEqual(response.data["user"]["role"], "publisher")
+
+        cache.clear()
+        self.assertEqual(
+            self.sign_in("maria@gmail.test", "Maria-Sept-2026!").status_code, 200
+        )
+
+    def test_a_link_cannot_be_used_twice(self):
+        token = self.token_from(self.invite())
+        self.logout()
+        self.client.post(
+            reverse("accept-invite"),
+            {"token": token, "new_password": "Maria-Sept-2026!"}, format="json",
+        )
+        again = self.client.post(
+            reverse("accept-invite"),
+            {"token": token, "new_password": "Different-Pass-99!"}, format="json",
+        )
+        self.assertEqual(again.status_code, 400)
+        cache.clear()
+        self.assertEqual(
+            self.sign_in("maria@gmail.test", "Maria-Sept-2026!").status_code, 200
+        )
+
+    def test_a_made_up_token_is_refused(self):
+        self.invite()
+        self.logout()
+        response = self.client.post(
+            reverse("accept-invite"),
+            {"token": "not-a-real-token", "new_password": "Maria-Sept-2026!"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_an_expired_link_is_refused_with_an_explanation(self):
+        token = self.token_from(self.invite())
+        profile = Profile.objects.get(user__email="maria@gmail.test")
+        profile.invite_expires_at = timezone.now() - timezone.timedelta(minutes=1)
+        profile.save(update_fields=["invite_expires_at"])
+        self.logout()
+
+        response = self.client.post(
+            reverse("accept-invite"),
+            {"token": token, "new_password": "Maria-Sept-2026!"}, format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("expired", response.data["detail"].lower())
+
+    def test_the_password_rules_apply_to_the_invite_screen_too(self):
+        token = self.token_from(self.invite())
+        self.logout()
+        for weak in ("short1!A", "Password123!", "nocapitals-2026!"):
+            with self.subTest(password=weak):
+                response = self.client.post(
+                    reverse("accept-invite"),
+                    {"token": token, "new_password": weak}, format="json",
+                )
+                self.assertEqual(response.status_code, 400)
+
+    def test_an_account_mid_invite_cannot_be_signed_into(self):
+        # There is no password to guess; the link is the only way in.
+        self.invite()
         self.logout()
         cache.clear()
-        self.assertEqual(self.sign_in("maria@gmail.test", first).status_code, 401)
-        self.assertEqual(self.sign_in("maria@gmail.test", second).status_code, 200)
+        self.assertEqual(
+            self.sign_in("maria@gmail.test", "anything-1A!").status_code, 401
+        )
+
+    def test_resending_invalidates_the_previous_link(self):
+        first = self.token_from(self.invite())
+        user = User.objects.get(email="maria@gmail.test")
+        second = self.token_from(
+            self.client.post(reverse("publisher-resend-invite", args=[user.pk]))
+        )
+        self.assertNotEqual(first, second)
+        self.logout()
+
+        stale = self.client.post(
+            reverse("accept-invite"),
+            {"token": first, "new_password": "Maria-Sept-2026!"}, format="json",
+        )
+        self.assertEqual(stale.status_code, 400)
+        fresh = self.client.post(
+            reverse("accept-invite"),
+            {"token": second, "new_password": "Maria-Sept-2026!"}, format="json",
+        )
+        self.assertEqual(fresh.status_code, 200)
 
     def test_the_same_email_cannot_be_invited_twice(self):
         self.invite()
@@ -688,12 +732,13 @@ class InviteFlowTests(RoleTestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_deleting_a_publisher_leaves_their_announcements_up(self):
-        # A class suspension notice must not vanish because someone left.
         notice = Announcement.objects.create(
             title="No classes tomorrow", author=self.publisher, category="suspension"
         )
         self.as_user("admin", ADMIN_PASSWORD)
-        response = self.client.delete(reverse("publisher-detail", args=[self.publisher.pk]))
+        response = self.client.delete(
+            reverse("publisher-detail", args=[self.publisher.pk])
+        )
         self.assertEqual(response.status_code, 204)
 
         notice.refresh_from_db()
@@ -753,10 +798,18 @@ class PasswordRuleTests(RoleTestCase):
         response = self.change_to("Tinta-Sept-2026!", current="not-my-password-1A!")
         self.assertEqual(response.status_code, 400)
 
-    def test_generated_temp_passwords_always_satisfy_the_rules(self):
-        # An invite that cannot be used is worse than no invite at all.
+    def test_invite_tokens_are_unique_and_verify_only_against_themselves(self):
+        seen = set()
         for _unused in range(50):
-            validate_password(generate_temp_password(), user=self.publisher)
+            token = generate_invite_token()
+            self.assertNotIn(token, seen)
+            seen.add(token)
+            self.assertTrue(tokens_match(token, hash_invite_token(token)))
+            self.assertFalse(tokens_match(token, hash_invite_token(token + "x")))
+
+    def test_an_empty_token_never_matches(self):
+        self.assertFalse(tokens_match("", hash_invite_token("something")))
+        self.assertFalse(tokens_match("something", ""))
 
 
 class TaxonomyFilterTests(TestCase):
@@ -1110,11 +1163,11 @@ class DatabaseUrlOptionsTests(TestCase):
 
 @override_settings(EMAIL_BACKEND=LOCMEM_EMAIL)
 class InviteDeliveryFailureTests(RoleTestCase):
-    """What happens when the mail server will not take the message.
+    """A failed email must not strand the account.
 
-    The account exists the moment it is created, so a failed email must not
-    leave it stranded: nobody would know the password, and resending would
-    fail exactly the same way.
+    Since the invite is a link rather than a credential, a bounced email costs
+    nothing: the admin copies the link and sends it another way. What matters
+    is that they are told why, and that the link is there either way.
     """
 
     def invite(self, email="unlucky@gmail.test"):
@@ -1127,15 +1180,13 @@ class InviteDeliveryFailureTests(RoleTestCase):
     def test_a_blocked_port_is_reported_as_such(self):
         with mock.patch(
             "announcements.emails.EmailMultiAlternatives.send",
-            side_effect=TimeoutError("timed out"),
+            side_effect=OSError(101, "Network is unreachable"),
         ):
             response = self.invite()
 
         self.assertEqual(response.status_code, 207)
         self.assertFalse(response.data["invite_email_sent"])
-        detail = response.data["detail"]
-        self.assertIn("Could not reach", detail)
-        self.assertIn("blocking outbound SMTP", detail)
+        self.assertIn("blocking outbound SMTP", response.data["detail"])
 
     def test_bad_credentials_are_reported_as_such(self):
         import smtplib
@@ -1147,63 +1198,60 @@ class InviteDeliveryFailureTests(RoleTestCase):
             response = self.invite()
 
         self.assertIn("App Password", response.data["detail"])
-        # Wrong credentials must not be described as a blocked port.
         self.assertNotIn("blocking outbound SMTP", response.data["detail"])
 
-    def test_the_admin_gets_the_password_so_the_account_is_not_dead(self):
+    def test_the_link_is_returned_even_when_the_email_fails(self):
         with mock.patch(
             "announcements.emails.EmailMultiAlternatives.send",
-            side_effect=TimeoutError("timed out"),
+            side_effect=OSError(101, "Network is unreachable"),
         ):
             response = self.invite()
 
-        password = response.data.get("temporary_password")
-        self.assertTrue(password, "no fallback password was returned")
+        link = response.data.get("invite_url")
+        self.assertTrue(link, "no invite link was returned")
 
-        # And it genuinely works.
+        # And it genuinely works when handed over by another route.
+        token = link.rstrip("/").rsplit("/", 1)[-1]
         self.logout()
-        cache.clear()
-        signed_in = self.sign_in("unlucky@gmail.test", password)
-        self.assertEqual(signed_in.status_code, 200)
-        self.assertTrue(signed_in.data["user"]["must_change_password"])
+        accepted = self.client.post(
+            reverse("accept-invite"),
+            {"token": token, "new_password": "Un-Lucky-2026!"}, format="json",
+        )
+        self.assertEqual(accepted.status_code, 200, accepted.data)
 
-    def test_the_password_is_never_returned_when_the_email_worked(self):
-        response = self.invite()
-        self.assertEqual(response.status_code, 201)
-        self.assertTrue(response.data["invite_email_sent"])
-        self.assertNotIn("temporary_password", response.data)
+    def test_still_no_password_anywhere_in_the_failure_response(self):
+        with mock.patch(
+            "announcements.emails.EmailMultiAlternatives.send",
+            side_effect=OSError(101, "Network is unreachable"),
+        ):
+            response = self.invite()
+        self.assertNotIn("temporary_password", json.dumps(response.data))
 
-    def test_a_failed_resend_also_hands_the_password_over(self):
+    def test_a_failed_resend_also_returns_the_new_link(self):
         self.invite()
         user = User.objects.get(email="unlucky@gmail.test")
         with mock.patch(
             "announcements.emails.EmailMultiAlternatives.send",
-            side_effect=TimeoutError("timed out"),
+            side_effect=OSError(101, "Network is unreachable"),
         ):
-            response = self.client.post(reverse("publisher-resend-invite", args=[user.pk]))
+            response = self.client.post(
+                reverse("publisher-resend-invite", args=[user.pk])
+            )
 
         self.assertEqual(response.status_code, 200)
         self.assertFalse(response.data["invite_email_sent"])
-        self.assertTrue(response.data.get("temporary_password"))
+        self.assertIn("/invite/", response.data["invite_url"])
 
-    def test_a_successful_resend_returns_no_password(self):
-        self.invite()
-        user = User.objects.get(email="unlucky@gmail.test")
-        response = self.client.post(reverse("publisher-resend-invite", args=[user.pk]))
-        self.assertEqual(response.status_code, 200)
-        self.assertTrue(response.data["invite_email_sent"])
-        self.assertNotIn("temporary_password", response.data)
-
-    def test_the_password_never_reaches_the_log(self):
+    def test_the_token_never_reaches_the_log(self):
         with mock.patch(
             "announcements.emails.EmailMultiAlternatives.send",
-            side_effect=TimeoutError("timed out"),
+            side_effect=OSError(101, "Network is unreachable"),
         ):
             with self.assertLogs("announcements.emails", level="ERROR") as captured:
                 response = self.invite()
 
-        password = response.data["temporary_password"]
-        self.assertNotIn(password, "\\n".join(captured.output))
+        token = response.data["invite_url"].rstrip("/").rsplit("/", 1)[-1]
+        self.assertNotIn(token, "\n".join(captured.output))
 
 
 @override_settings(EMAIL_BACKEND="django.core.mail.backends.console.EmailBackend")
@@ -1218,4 +1266,4 @@ class ConsoleBackendIsNotDeliveryTests(RoleTestCase):
         self.assertEqual(response.status_code, 207)
         self.assertFalse(response.data["invite_email_sent"])
         self.assertIn("not configured", response.data["detail"])
-        self.assertTrue(response.data.get("temporary_password"))
+        self.assertIn("/invite/", response.data["invite_url"])

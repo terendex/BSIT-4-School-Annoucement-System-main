@@ -125,13 +125,13 @@ import AdminDashboard from "../../components/admin/AdminDashboard.tsx";
   .admin-bar {
     display: flex;
     flex-wrap: wrap;
-    gap: 12px;
+    gap: 14px;
     align-items: center;
     justify-content: space-between;
     background: var(--paper);
     border: 1px solid var(--line);
     border-radius: var(--radius);
-    padding: 14px 18px;
+    padding: 16px 18px;
     margin-bottom: 18px;
     box-shadow: var(--shadow-sm);
   }
@@ -145,6 +145,23 @@ import AdminDashboard from "../../components/admin/AdminDashboard.tsx";
     display: flex;
     gap: 8px;
     flex-wrap: wrap;
+    align-items: center;
+  }
+
+  /* A hairline before the housekeeping buttons, so "New announcement" reads as
+     the one thing this page is for. */
+  .admin-bar__divider {
+    width: 1px;
+    align-self: stretch;
+    min-height: 26px;
+    background: var(--line);
+    margin: 0 2px;
+  }
+
+  @media (max-width: 700px) {
+    .admin-bar__divider {
+      display: none;
+    }
   }
 
   .searchbar {
@@ -179,15 +196,26 @@ import AdminDashboard from "../../components/admin/AdminDashboard.tsx";
     width: 100%;
     border-collapse: collapse;
     font-size: 0.92rem;
-    min-width: 760px;
+    /* Wide enough for the action buttons to sit on one row; the wrapper
+       scrolls horizontally on anything narrower. */
+    min-width: 940px;
   }
 
   .admin-table th,
   .admin-table td {
     text-align: left;
-    padding: 12px 14px;
+    padding: 14px;
     border-bottom: 1px solid var(--line);
     vertical-align: middle;
+  }
+
+  /* Scanning a row of six columns is easier with the row itself responding. */
+  .admin-table tbody tr {
+    transition: background 0.12s ease;
+  }
+
+  .admin-table tbody tr:hover {
+    background: var(--navy-50);
   }
 
   .admin-table th {
@@ -196,6 +224,25 @@ import AdminDashboard from "../../components/admin/AdminDashboard.tsx";
     letter-spacing: 0.07em;
     text-transform: uppercase;
     color: var(--muted);
+    /* "Posted by" was folding onto two lines and deepening every header. */
+    white-space: nowrap;
+  }
+
+  /* The Publishers table has four columns, not six, and lives inside an
+     820px modal - the dashboard's min-width would make it scroll sideways for
+     no reason. */
+  .admin-table--compact {
+    min-width: 560px;
+  }
+
+  /* The filing badges need room; without it "Exam schedule" and "4th year"
+     stacked into a narrow ragged column. */
+  .admin-table__filed {
+    min-width: 200px;
+  }
+
+  .admin-table__filed .tag + .tag {
+    margin-left: 5px;
   }
 
   .admin-table tr:last-child td {
@@ -223,7 +270,11 @@ import AdminDashboard from "../../components/admin/AdminDashboard.tsx";
     display: flex;
     gap: 6px;
     justify-content: flex-end;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+  }
+
+  .admin-table__actions .btn {
+    white-space: nowrap;
   }
 
   button.tag {
@@ -385,6 +436,13 @@ import AdminDashboard from "../../components/admin/AdminDashboard.tsx";
       justify-content: stretch;
       margin-top: 10px;
       gap: 8px;
+      /* The desktop rule is nowrap, which would crush four buttons into a
+         360px row. On a card they get two comfortable rows instead. */
+      flex-wrap: wrap;
+    }
+
+    .admin-table__actions .btn {
+      flex: 1 1 calc(50% - 4px);
     }
 
     .admin-table__actions .btn {

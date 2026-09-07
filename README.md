@@ -180,26 +180,39 @@ it. Everyone else is added by invitation.
 
 ### Adding a publisher
 
-1. Sign in as the admin → **Publishers** → type their email → **Send invite**.
-2. They get an email with a **temporary password** that expires in 7 days
-   (`INVITE_EXPIRY_DAYS`).
-3. They sign in at `/login` with that password, and the site immediately asks
-   them to set their own. Until they do, they can do nothing else — the API
-   refuses every other request, not just the buttons.
-4. Password rules: at least 10 characters, with an uppercase letter, a
-   lowercase letter, a number and a symbol. Common passwords are rejected even
-   in disguise, so `Password123!` will not be accepted.
+1. Sign in as the admin -> **Publishers** -> type their email -> **Send invite**.
+2. They get an email with a **link**, valid for 7 days (`INVITE_EXPIRY_DAYS`).
+3. They open it, choose their own password, and are signed straight in.
 
-Losing the email is not a problem: **Resend invite** issues a new temporary
-password and invalidates the old one. **Disable** stops an account signing in
-while keeping it; **Remove** deletes it. Either way, the announcements that
-person posted stay on the board.
+No password is ever created for them, emailed, or shown to anyone. Until the
+link is opened the account has no usable password at all, so there is nothing
+to intercept and nothing for you to pass on by accident. **You never see a
+publisher's password** - not even as the admin.
 
-Email needs `EMAIL_HOST_USER` and `EMAIL_HOST_PASSWORD` set to a Gmail address
-and a Google **App Password** (from myaccount.google.com/apppasswords, with
-2-Step Verification on — a normal Gmail password is refused by the SMTP
-server). With them unset, invites are printed to the server console instead of
-being sent, which is what you want locally.
+The link is also shown in the dashboard after you send it, so if email is down
+you can pass it on over Messenger and the invite still works. It can only be
+used once, and issuing a new one kills the old.
+
+Password rules: at least 10 characters, with an uppercase letter, a lowercase
+letter, a number and a symbol. Common passwords are rejected even in disguise,
+so `Password123!` will not be accepted.
+
+**Resend invite** issues a fresh link, which doubles as the password reset for
+someone who has forgotten theirs. **Disable** stops an account signing in while
+keeping it; **Remove** deletes it. Either way, the announcements that person
+posted stay on the board.
+
+Email goes through **Brevo's HTTP API**, not SMTP. Railway - like most
+container hosts - blocks outbound SMTP, which shows up as
+`OSError: [Errno 101] Network is unreachable` on port 587; no credential fixes
+that, because the packets never leave the container. Brevo sends over HTTPS
+instead. Set `BREVO_API_KEY` to an **API key** (`xkeysib-...`, from Brevo's
+SMTP & API page under *API Keys*) and `EMAIL_SENDER` to an address verified in
+that account. An SMTP key (`xsmtpsib-...`) is a different credential and will
+not work here.
+
+With no key set, invites are printed to the server console instead of being
+sent - fine locally, and the startup checks warn if it happens in production.
 
 ### Posting an announcement
 
@@ -367,8 +380,8 @@ failed migration stops the release instead of half-applying it.
 | `DJANGO_DEBUG` | `False` |
 | `DJANGO_SECURE_SSL_REDIRECT` | `True` |
 | `FRONTEND_ORIGIN` | `https://your-app.vercel.app` (no trailing slash) |
-| `EMAIL_HOST_USER` | the Gmail address invites are sent from |
-| `EMAIL_HOST_PASSWORD` | a Google **App Password**, not the account password |
+| `BREVO_API_KEY` | a Brevo **API key** (`xkeysib-...`), not an SMTP key |
+| `EMAIL_SENDER` | an address verified as a sender in Brevo |
 | `SITE_NAME` | shown as the sender name in invite emails |
 | `CLOUDINARY_CLOUD_NAME` / `CLOUDINARY_API_KEY` / `CLOUDINARY_API_SECRET` | from step A |
 | `ADMIN_USERNAME` / `ADMIN_EMAIL` / `ADMIN_PASSWORD` | your admin login |

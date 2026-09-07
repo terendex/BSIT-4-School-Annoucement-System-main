@@ -1,14 +1,14 @@
-"""Password rules and the one-time password handed out with an invite.
+"""Password rules, and the tokens that carry an invite.
 
 Django's own validators already cover length, common passwords, all-numeric
 passwords, and similarity to the account's own email. This adds the character
-mix on top, and generates the temporary password an invited publisher receives.
+mix on top, and the disguised-common-password check that catches Password123!.
 
-The temporary password is never stored in the clear and never returned by the
-API - it exists only inside the invite email. The account carries it hashed,
-like any other password, plus a must_change_password flag that the API enforces
-until the publisher picks their own.
+There is deliberately no temporary-password generator here. An invite is a
+link, not a credential: the account has no usable password until its owner
+chooses one, so there is never a password for anyone else to hold.
 """
+import hashlib
 import re
 import secrets
 
@@ -22,8 +22,6 @@ _UNAMBIGUOUS_LOWER = "abcdefghijkmnopqrstuvwxyz"      # no l
 _UNAMBIGUOUS_UPPER = "ABCDEFGHJKLMNPQRSTUVWXYZ"       # no I, no O
 _UNAMBIGUOUS_DIGITS = "23456789"                       # no 0, no 1
 _UNAMBIGUOUS_SYMBOLS = "!@#$%*?-+"
-
-TEMP_PASSWORD_LENGTH = 14
 
 
 class ComplexityValidator:
@@ -117,29 +115,29 @@ class CommonPasswordVariationValidator(CommonPasswordValidator):
         )
 
 
-def generate_temp_password(length: int = TEMP_PASSWORD_LENGTH) -> str:
-    """A random password that satisfies every rule above on the first try.
+# --------------------------------------------------------------------------
+# Invite tokens
+# --------------------------------------------------------------------------
+# An invite is a link, not a password. Nobody - not even the admin who sent it
+# - ever learns the credential the publisher ends up with, and no password
+# travels through an inbox or a chat window.
+#
+# The token is stored as a SHA-256 digest. It is 256 bits of `secrets` output
+# rather than a human-chosen phrase, so there is nothing to brute force and no
+# need for a slow password hash here.
+INVITE_TOKEN_BYTES = 32
 
-    One character is drawn from each required class before the rest is filled
-    in, so a generated password is never rejected by our own validators - an
-    invite that cannot be used is worse than no invite.
-    """
-    alphabet = (
-        _UNAMBIGUOUS_LOWER
-        + _UNAMBIGUOUS_UPPER
-        + _UNAMBIGUOUS_DIGITS
-        + _UNAMBIGUOUS_SYMBOLS
-    )
-    required = [
-        secrets.choice(_UNAMBIGUOUS_LOWER),
-        secrets.choice(_UNAMBIGUOUS_UPPER),
-        secrets.choice(_UNAMBIGUOUS_DIGITS),
-        secrets.choice(_UNAMBIGUOUS_SYMBOLS),
-    ]
-    filler = [secrets.choice(alphabet) for _unused in range(max(0, length - len(required)))]
 
-    characters = required + filler
-    # secrets.SystemRandom().shuffle, so the required characters do not always
-    # sit in the first four positions.
-    secrets.SystemRandom().shuffle(characters)
-    return "".join(characters)
+def generate_invite_token() -> str:
+    return secrets.token_urlsafe(INVITE_TOKEN_BYTES)
+
+
+def hash_invite_token(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def tokens_match(token: str, stored_hash: str) -> bool:
+    """Constant-time comparison, so a wrong token leaks nothing by timing."""
+    if not token or not stored_hash:
+        return False
+    return secrets.compare_digest(hash_invite_token(token), stored_hash)
