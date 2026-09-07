@@ -9,7 +9,7 @@ Run: python frontend/scripts/build_logo.py
 """
 from pathlib import Path
 
-from PIL import Image, ImageOps
+from PIL import Image, ImageEnhance, ImageFilter, ImageOps
 
 ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / "brand" / "slclogo.jpg"
@@ -18,8 +18,10 @@ SIZE = 800  # keep in step with LOGO_WIDTH/LOGO_HEIGHT in src/lib/config.ts
 NAVY = (31, 42, 107)
 WHITE = (255, 255, 255)
 ICON_DIR = ROOT / "public"
-# How much of the seal the favicon keeps - just the central crest.
-CREST_FRACTION = 0.30
+# Downscaling averages the seal's fine lines into grey mush, so each favicon
+# size gets its contrast and edges restored afterwards.
+FAVICON_CONTRAST = 1.7
+FAVICON_SHARPEN = 180
 
 
 def main():
@@ -44,30 +46,31 @@ def main():
 
 
 def build_favicons(seal):
-    """Crop to the central shield for the favicon.
+    """Write the favicons from the full seal.
 
-    The full seal has ring text that turns to mush at 16px, so the tab icon
-    uses just the crest, with a little white margin so it does not touch the
-    edges of the tab.
+    The seal is detailed for a 16px tab icon, so rather than a plain resize
+    each size is contrast-boosted and unsharp-masked afterwards - that keeps the
+    outer ring and the shield readable instead of averaging them into a blob.
     """
-    w, h = seal.size
-    half = int(w * CREST_FRACTION / 2)
-    crest = seal.crop((w // 2 - half, h // 2 - half, w // 2 + half, h // 2 + half))
 
-    pad = int(crest.width * 0.08)
-    padded = Image.new("RGB", (crest.width + pad * 2, crest.height + pad * 2), WHITE)
-    padded.paste(crest, (pad, pad))
+    def icon(size):
+        im = seal.resize((size, size), Image.LANCZOS)
+        im = ImageEnhance.Contrast(im).enhance(FAVICON_CONTRAST)
+        return im.filter(
+            ImageFilter.UnsharpMask(radius=1, percent=FAVICON_SHARPEN, threshold=0)
+        )
 
     png32 = ICON_DIR / "favicon-32.png"
-    padded.resize((32, 32), Image.LANCZOS).save(png32, "PNG", optimize=True)
+    icon(32).save(png32, "PNG", optimize=True)
 
+    # Large enough that the seal reads properly; no sharpening needed.
     png180 = ICON_DIR / "apple-touch-icon.png"
-    padded.resize((180, 180), Image.LANCZOS).save(png180, "PNG", optimize=True)
+    seal.resize((180, 180), Image.LANCZOS).save(png180, "PNG", optimize=True)
 
+    # Each size rendered and tuned separately, rather than letting the ICO
+    # writer downscale one bitmap for all of them.
     ico = ICON_DIR / "favicon.ico"
-    padded.resize((64, 64), Image.LANCZOS).save(
-        ico, "ICO", sizes=[(16, 16), (32, 32), (48, 48)]
-    )
+    icon(48).save(ico, "ICO", sizes=[(16, 16), (32, 32), (48, 48)])
 
     for path in (ico, png32, png180):
         print(f"wrote {path.name} ({path.stat().st_size / 1024:.1f} KB)")
