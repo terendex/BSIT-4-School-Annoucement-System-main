@@ -13,11 +13,11 @@ export const SITE_URL = stripSlash(
 );
 
 export const SITE_NAME =
-  import.meta.env.PUBLIC_SITE_NAME || "Saint Louis College - BSIT 4 Announcements";
+  import.meta.env.PUBLIC_SITE_NAME || "Terendex's Announcement Services";
 
 export const SITE_TAGLINE =
   import.meta.env.PUBLIC_SITE_TAGLINE ||
-  "Class announcements for BSIT 4, City of San Fernando, La Union.";
+  "Announcements for BSIT 4 - Saint Louis College, City of San Fernando, La Union.";
 
 /** Logo lives in /public and doubles as the Open Graph fallback image. */
 export const LOGO_PATH = "/logo.png";
