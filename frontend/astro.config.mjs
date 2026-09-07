@@ -22,13 +22,4 @@ export default defineConfig({
       : vercel({ webAnalytics: { enabled: false } }),
   site: process.env.PUBLIC_SITE_URL || "http://localhost:4321",
   integrations: [react()],
-  vite: {
-    ssr: {
-      // sanitize-html must be BUNDLED, not left external. Marked external, the
-      // adapter's file tracing missed its transitive deps (htmlparser2,
-      // escape-string-regexp), so rendering a Markdown body threw
-      // "Cannot find module" at runtime and every announcement page 500'd.
-      noExternal: ["sanitize-html"],
-    },
-  },
 });
