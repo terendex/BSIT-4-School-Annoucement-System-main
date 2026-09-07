@@ -21,6 +21,9 @@ export const SITE_TAGLINE =
 
 /** Logo lives in /public and doubles as the Open Graph fallback image. */
 export const LOGO_PATH = "/logo.png";
+/** Keep in step with public/logo.png - sent as og:image:width/height. */
+export const LOGO_WIDTH = 1200;
+export const LOGO_HEIGHT = 1200;
 
 export const absoluteUrl = (path: string) =>
   path.startsWith("http") ? path : `${SITE_URL}${path.startsWith("/") ? path : `/${path}`}`;

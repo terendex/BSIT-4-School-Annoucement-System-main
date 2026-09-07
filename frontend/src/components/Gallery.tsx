@@ -42,7 +42,7 @@ export default function Gallery({ images }: Props) {
 
   return (
     <>
-      <ul className="gallery">
+      <ul className={images.length === 1 ? "gallery gallery--single" : "gallery"}>
         {images.map((image, index) => (
           <li key={image.id} className="gallery__item">
             <button

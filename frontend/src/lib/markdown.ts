@@ -41,8 +41,19 @@ const SANITIZE_OPTIONS: sanitizeHtml.IOptions = {
   disallowedTagsMode: "discard",
 };
 
+/**
+ * Wrap tables in their own scroller. Applied after sanitising, so this markup
+ * is ours rather than anything the author could inject. A wide table then
+ * scrolls inside the article instead of widening the whole page on a phone.
+ */
+function wrapTables(html: string): string {
+  return html
+    .replace(/<table(\s[^>]*)?>/g, '<div class="prose__scroll"><table$1>')
+    .replace(/<\/table>/g, "</table></div>");
+}
+
 export function renderMarkdown(source: string): string {
   if (!source) return "";
   const html = marked.parse(source, { async: false }) as string;
-  return sanitizeHtml(html, SANITIZE_OPTIONS);
+  return wrapTables(sanitizeHtml(html, SANITIZE_OPTIONS));
 }

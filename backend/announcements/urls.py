@@ -18,6 +18,7 @@ urlpatterns = [
          name="public-announcement-list"),
     path("announcements/<slug:slug>/", views.PublicAnnouncementDetailView.as_view(),
          name="public-announcement-detail"),
+    path("source-pages/", views.SourcePageListView.as_view(), name="source-pages"),
 
     # --- admin, JWT ---
     path("admin/attachments/<int:pk>/", views.AdminAttachmentDetailView.as_view(),

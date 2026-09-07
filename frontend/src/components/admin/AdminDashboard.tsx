@@ -225,7 +225,7 @@ export default function AdminDashboard() {
                     </a>
                     <span className="field__hint">/a/{announcement.slug}</span>
                   </td>
-                  <td>
+                  <td data-label="Status">
                     <button
                       type="button"
                       className={`tag ${announcement.published ? "" : "tag--draft"}`}
@@ -235,12 +235,12 @@ export default function AdminDashboard() {
                       {announcement.published ? "Published" : "Draft"}
                     </button>
                   </td>
-                  <td className="admin-table__nowrap">
+                  <td className="admin-table__nowrap" data-label="Attachments">
                     {announcement.image_count} photo
                     {announcement.image_count === 1 ? "" : "s"}, {announcement.file_count} file
                     {announcement.file_count === 1 ? "" : "s"}
                   </td>
-                  <td className="admin-table__nowrap">
+                  <td className="admin-table__nowrap" data-label="Updated">
                     {formatDateTime(announcement.updated_at)}
                   </td>
                   <td>

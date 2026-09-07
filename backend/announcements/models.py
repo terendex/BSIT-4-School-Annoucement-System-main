@@ -5,6 +5,8 @@ from django.db import models
 from django.utils import timezone
 from django.utils.text import slugify
 
+from .sources import SOURCE_PAGE_CHOICES, page_name
+
 SLUG_MAX_LENGTH = 80
 
 # Rough markdown stripper used only to build plain-text excerpts for OG tags.
@@ -22,8 +24,31 @@ _MD_PATTERNS = [
 ]
 
 
+# A markdown table separator row, e.g. |---|:--:|---|
+_TABLE_SEPARATOR = re.compile(r"^\s*\|?[\s:|-]*-[\s:|-]*\|[\s:|-]*$")
+# A table body row: starts and ends with a pipe.
+_TABLE_ROW = re.compile(r"^\s*\|.*\|\s*$")
+
+
+def _flatten_tables(text: str) -> str:
+    """Turn table rows into readable prose so excerpts are not full of pipes.
+
+    Only lines that really look like table rows are touched, so a title such as
+    "SUNDAY STARLIGHT || September Mass" keeps its own punctuation.
+    """
+    lines = []
+    for line in text.splitlines():
+        if _TABLE_SEPARATOR.match(line):
+            continue
+        if _TABLE_ROW.match(line):
+            cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+            line = " - ".join(cell for cell in cells if cell)
+        lines.append(line)
+    return "\n".join(lines)
+
+
 def markdown_to_text(value: str) -> str:
-    text = value or ""
+    text = _flatten_tables(value or "")
     for pattern, replacement in _MD_PATTERNS:
         text = pattern.sub(replacement, text)
     return text.strip()
@@ -64,6 +89,12 @@ class Announcement(models.Model):
         blank=True,
         related_name="announcements",
     )
+    # Where this was re-posted from, when it mirrors a Facebook page post.
+    source_page = models.CharField(
+        max_length=50, blank=True, choices=SOURCE_PAGE_CHOICES
+    )
+    source_url = models.URLField(max_length=500, blank=True)
+
     published_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -91,6 +122,10 @@ class Announcement(models.Model):
         if len(text) <= 200:
             return text
         return text[:197].rsplit(" ", 1)[0] + "..."
+
+    @property
+    def source_page_name(self) -> str:
+        return page_name(self.source_page)
 
     @property
     def cover_image(self):

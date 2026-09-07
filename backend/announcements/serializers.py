@@ -3,6 +3,7 @@ from django.utils.text import slugify
 from rest_framework import serializers
 
 from .models import Announcement, Attachment, unique_slug
+from .sources import SOURCE_PAGE_SLUGS
 
 User = get_user_model()
 
@@ -43,6 +44,7 @@ class AttachmentUpdateSerializer(serializers.ModelSerializer):
 
 class AnnouncementListSerializer(serializers.ModelSerializer):
     excerpt = serializers.CharField(read_only=True)
+    source_page_name = serializers.CharField(read_only=True)
     cover_image = serializers.SerializerMethodField()
     image_count = serializers.SerializerMethodField()
     file_count = serializers.SerializerMethodField()
@@ -58,6 +60,9 @@ class AnnouncementListSerializer(serializers.ModelSerializer):
             "cover_image",
             "image_count",
             "file_count",
+            "source_page",
+            "source_page_name",
+            "source_url",
             "published_at",
             "created_at",
             "updated_at",
@@ -99,8 +104,30 @@ class AnnouncementWriteSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Announcement
-        fields = ["id", "title", "slug", "body", "published", "created_at", "updated_at"]
+        fields = [
+            "id",
+            "title",
+            "slug",
+            "body",
+            "published",
+            "source_page",
+            "source_url",
+            "created_at",
+            "updated_at",
+        ]
         read_only_fields = ["id", "created_at", "updated_at"]
+
+    def validate_source_page(self, value):
+        value = (value or "").strip()
+        if value and value not in SOURCE_PAGE_SLUGS:
+            raise serializers.ValidationError("Not one of the watched pages.")
+        return value
+
+    def validate_source_url(self, value):
+        value = (value or "").strip()
+        if value and not value.startswith(("http://", "https://")):
+            raise serializers.ValidationError("Must be a full http(s) link.")
+        return value
 
     def validate_title(self, value):
         value = value.strip()

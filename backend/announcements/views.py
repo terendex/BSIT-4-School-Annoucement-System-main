@@ -21,6 +21,7 @@ from .serializers import (
     LoginSerializer,
     UserSerializer,
 )
+from .sources import SOURCE_PAGES
 from .storage import delete_attachment, upload_attachment
 from .throttles import UploadRateThrottle
 from .validators import validate_upload
@@ -113,6 +114,17 @@ class PublicAnnouncementDetailView(generics.RetrieveAPIView):
 
     def get_queryset(self):
         return Announcement.objects.published().with_attachments()
+
+
+class SourcePageListView(APIView):
+    """The Facebook pages the admin re-posts from, for the editor dropdown."""
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+    throttle_scope = "public"
+
+    def get(self, request):
+        return Response({"results": SOURCE_PAGES})
 
 
 # --------------------------------------------------------------------------

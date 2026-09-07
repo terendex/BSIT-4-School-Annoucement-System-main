@@ -1,10 +1,13 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Modal from "./Modal";
 import {
   ApiError,
   createAnnouncement,
+  fetchSourcePages,
   updateAnnouncement,
+  uploadAttachment,
 } from "../../lib/adminClient";
+import type { SourcePage } from "../../lib/adminClient";
 import type { Announcement } from "../../lib/types";
 
 interface Props {
@@ -20,9 +23,19 @@ export default function AnnouncementModal({ announcement, onClose, onSaved }: Pr
   const [body, setBody] = useState(announcement?.body ?? "");
   const [slug, setSlug] = useState(announcement?.slug ?? "");
   const [published, setPublished] = useState(announcement?.published ?? true);
+  const [sourcePage, setSourcePage] = useState(announcement?.source_page ?? "");
+  const [sourceUrl, setSourceUrl] = useState(announcement?.source_url ?? "");
+  const [pages, setPages] = useState<SourcePage[]>([]);
+  // Create mode only: the poster/photos to attach in the same step.
+  const [files, setFiles] = useState<File[]>([]);
+  const [progress, setProgress] = useState("");
   const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    fetchSourcePages().then(setPages).catch(() => setPages([]));
+  }, []);
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -30,21 +43,47 @@ export default function AnnouncementModal({ announcement, onClose, onSaved }: Pr
     setError("");
     setFieldErrors({});
     try {
-      const saved = isEdit
+      let saved = isEdit
         ? await updateAnnouncement(announcement!.id, {
             title,
             body,
             published,
+            source_page: sourcePage,
+            source_url: sourceUrl,
             // Only send the slug when it actually changed; the link should stay put.
             ...(slug && slug !== announcement!.slug ? { slug } : {}),
           })
-        : await createAnnouncement({ title, body, published, ...(slug ? { slug } : {}) });
+        : await createAnnouncement({
+            title,
+            body,
+            published,
+            source_page: sourcePage,
+            source_url: sourceUrl,
+            ...(slug ? { slug } : {}),
+          });
+
+      // Upload anything picked here, so one dialog covers the whole post.
+      for (const [index, file] of files.entries()) {
+        setProgress(`Uploading ${index + 1} of ${files.length}...`);
+        const kind = file.type.startsWith("image/") ? "image" : "file";
+        const attachment = await uploadAttachment(saved.id, file, kind);
+        saved = {
+          ...saved,
+          images: kind === "image" ? [...saved.images, attachment] : saved.images,
+          files: kind === "file" ? [...saved.files, attachment] : saved.files,
+          image_count: saved.image_count + (kind === "image" ? 1 : 0),
+          file_count: saved.file_count + (kind === "file" ? 1 : 0),
+          cover_image: saved.cover_image ?? (kind === "image" ? attachment : null),
+        };
+      }
+
       onSaved(saved);
     } catch (err) {
       const apiError = err as ApiError;
       setError(apiError.message || "Could not save the announcement.");
       setFieldErrors(apiError.fields ?? {});
     } finally {
+      setProgress("");
       setBusy(false);
     }
   };
@@ -63,7 +102,11 @@ export default function AnnouncementModal({ announcement, onClose, onSaved }: Pr
             Cancel
           </button>
           <button type="submit" form="announcement-form" className="btn" disabled={busy}>
-            {busy ? "Saving..." : isEdit ? "Save changes" : "Create announcement"}
+            {busy
+              ? progress || "Saving..."
+              : isEdit
+                ? "Save changes"
+                : "Create announcement"}
           </button>
         </>
       }
@@ -115,6 +158,43 @@ export default function AnnouncementModal({ announcement, onClose, onSaved }: Pr
           {fieldError("body") && <span className="field__error">{fieldError("body")}</span>}
         </label>
 
+        <div className="field">
+          <span className="field__label">Re-posted from (optional)</span>
+          <select
+            className="select"
+            value={sourcePage}
+            onChange={(event) => setSourcePage(event.target.value)}
+          >
+            <option value="">Not from a Facebook page</option>
+            {pages.map((page) => (
+              <option key={page.slug} value={page.slug}>
+                {page.name}
+              </option>
+            ))}
+          </select>
+          {fieldError("source_page") && (
+            <span className="field__error">{fieldError("source_page")}</span>
+          )}
+        </div>
+
+        <label className="field">
+          <span className="field__label">Link to the original post (optional)</span>
+          <input
+            className="input"
+            type="url"
+            value={sourceUrl}
+            onChange={(event) => setSourceUrl(event.target.value)}
+            placeholder="https://www.facebook.com/sits.slclu/posts/..."
+            maxLength={500}
+          />
+          <span className="field__hint">
+            Shown as a "Re-posted from" credit under the title.
+          </span>
+          {fieldError("source_url") && (
+            <span className="field__error">{fieldError("source_url")}</span>
+          )}
+        </label>
+
         <label className="checkbox">
           <input
             type="checkbox"
@@ -124,10 +204,27 @@ export default function AnnouncementModal({ announcement, onClose, onSaved }: Pr
           <span>Published (visible to classmates)</span>
         </label>
 
-        {isEdit && (
+        {isEdit ? (
           <p className="field__hint" style={{ marginTop: "14px" }}>
             Photos and files are managed from the Attachments dialog on the dashboard.
           </p>
+        ) : (
+          <label className="field" style={{ marginTop: "18px" }}>
+            <span className="field__label">Poster and attachments (optional)</span>
+            <input
+              className="input"
+              type="file"
+              multiple
+              accept=".jpg,.jpeg,.png,.gif,.webp,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip"
+              onChange={(event) => setFiles(Array.from(event.target.files ?? []))}
+              disabled={busy}
+            />
+            <span className="field__hint">
+              Uploaded as soon as the announcement is created. The first photo becomes
+              the Messenger preview image.
+              {files.length > 0 && ` ${files.length} selected.`}
+            </span>
+          </label>
         )}
       </form>
     </Modal>

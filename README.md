@@ -25,6 +25,29 @@ suffix (`exam-schedule-2`). Every announcement page carries Open Graph tags in t
 server-rendered HTML, so Facebook's crawler sees the title, snippet, and first
 image — falling back to the school seal when there is no photo.
 
+### On phones
+
+Most classmates open these links from Messenger on a phone, so the layout is
+built for that first and verified from 320 px (an iPhone SE / small Android)
+up to 1440 px, in portrait and landscape:
+
+- **Nothing scrolls sideways.** Long words, long URLs, and wide schedule tables
+  are contained — a table gets its own horizontal scroller inside the article
+  rather than stretching the page.
+- **Cards stack** below 640 px; the poster moves above the text.
+- **The admin dashboard becomes a card list** below 700 px. The desktop table
+  has five columns and cannot be read on a phone, so each announcement turns
+  into a card with its Edit / Files / Share / Delete buttons in thumb reach.
+- **Controls are at least 44 px tall** on touch screens, and form fields use
+  16 px text so iOS Safari does not zoom in when you tap a field.
+- **Heights use `dvh`**, so the mobile address bar cannot cut off a modal's
+  Save button.
+
+To re-check after a change, `frontend` has no built-in harness — the audit was
+run with a throwaway Puppeteer script that loads each page at ten widths and
+reports any element wider than the viewport. Chrome DevTools device toolbar
+(`Ctrl+Shift+M`) covers the same ground manually.
+
 ---
 
 ## Running the system
@@ -131,17 +154,83 @@ then use **Share** to copy the link for your Messenger group chat.
 
 **To stop:** press `Ctrl+C` in each terminal.
 
-### Posting your first announcement
+### Posting an announcement
 
 1. Go to <http://localhost:4321/admin> and sign in.
-2. **New announcement** → title and body (Markdown: `**bold**`, `- bullets`,
-   `[links](https://…)`) → keep **Published** ticked → **Create announcement**.
-3. **Files** on that row → upload photos and attachments. The first photo becomes
-   the Messenger preview image.
-4. **Share** → **Copy link** → paste into Messenger.
+2. **New announcement** → fill in:
+   - **Title** — the bold line in the Messenger preview.
+   - **Body** — Markdown (`**bold**`, `- bullets`, `[links](https://…)`). The
+     first ~200 characters become the grey line in the preview.
+   - **Re-posted from** — which page it came from (optional).
+   - **Link to the original post** — the Facebook post URL (optional).
+   - **Poster and attachments** — the poster image and any files. The first
+     photo becomes the Messenger preview image.
+3. Keep **Published** ticked → **Create announcement**. Everything, uploads
+   included, is saved in that one dialog.
+4. **Share** on that row → **Copy link** → paste into your Messenger group chat.
 
-While testing locally the link will be a `localhost` URL, which only works on
-your own computer. Real shareable links start working once it is deployed.
+To change something later, **Edit** for the text or **Files** for the
+attachments. Editing the title does *not* move the link, so anything you already
+sent keeps working.
+
+While testing locally the link is a `localhost` URL that only works on your own
+computer. Real shareable links start working once it is deployed.
+
+### Re-posting from the SLC Facebook pages
+
+The pages in the **Re-posted from** dropdown are:
+
+| | |
+|---|---|
+| Saint Louis College | <https://www.facebook.com/slc1964> |
+| SLC Central Student Council | <https://www.facebook.com/SLCCSC> |
+| SLC Student Help Desk | <https://www.facebook.com/SLCstudentHelpDesk> |
+| SLC Registrar | <https://www.facebook.com/slcRegistrar> |
+| SLC CAS-TE-IT-CRIM | <https://www.facebook.com/slccasteitcrim> |
+| Society of Information Technology Students | <https://www.facebook.com/sits.slclu> |
+
+To edit that list, change `backend/announcements/sources.py` — the dropdown is
+served from there via `/api/source-pages/`, so there is one place to update.
+
+**The system does not read those pages automatically, and cannot.** Facebook's
+Graph API only returns a Page's posts to an app holding an access token issued
+by an admin *of that Page*; a page being publicly viewable grants no API access.
+The alternative — scraping the HTML — violates Facebook's terms, hits login
+walls for logged-out requests, and breaks whenever they change their markup, so
+it is not a safe base for something your class depends on.
+
+The workflow is therefore a deliberate re-post, which takes about a minute:
+
+1. Open the post on Facebook.
+2. Copy the caption; save the poster image (right-click → *Save image as*).
+3. In the admin: **New announcement** → paste the caption into the body, write a
+   short title, pick the page under **Re-posted from**, paste the post URL, and
+   select the saved image under **Poster and attachments**.
+4. **Create announcement** → **Share** → **Copy link** → paste into Messenger.
+
+Readers see a *"Re-posted from …"* credit under the title linking back to the
+original, so the source page still gets the traffic.
+
+### What the Messenger preview looks like
+
+Pasting an announcement link into Messenger produces the large-image card:
+poster on top, the **title** in bold, then the start of the body in grey.
+
+That layout depends on three things, all handled for you:
+
+- The page is **server-rendered**, so Facebook's crawler sees the tags in the
+  HTML rather than an empty shell.
+- `og:image:width` / `og:image:height` are sent with every announcement, taken
+  from the uploaded image. Facebook needs them to commit to the large card
+  instead of a small thumbnail.
+- With no photo attached, the school seal is used, so a link is never previewed
+  bare.
+
+Use a poster of at least 600×315 (bigger is better; portrait posters like
+1080×1350 work fine). After the first share of a new link, run it through
+[Facebook's Sharing Debugger](https://developers.facebook.com/tools/debug/) if
+the preview looks stale — Facebook caches previews aggressively, and *Scrape
+Again* refreshes it.
 
 ### If something goes wrong
 
@@ -159,7 +248,7 @@ your own computer. Real shareable links start working once it is deployed.
 ### Running the tests
 
 ```bash
-cd backend && python manage.py test      # 17 tests: slugs, auth, permissions, uploads
+cd backend && python manage.py test      # 22 tests: slugs, auth, permissions, uploads, sources
 cd frontend && npx astro check           # TypeScript + Astro diagnostics
 ```
 
@@ -246,6 +335,7 @@ Public, no auth:
 |---|---|---|
 | `GET` | `/api/announcements/` | published only, newest first, `?page=` `?q=` |
 | `GET` | `/api/announcements/<slug>/` | one announcement, 404 if unpublished |
+| `GET` | `/api/source-pages/` | the watched Facebook pages, for the editor dropdown |
 
 Admin, `Authorization: Bearer <access token>`:
 
@@ -304,10 +394,11 @@ backend/
     serializers.py     public read / admin write shapes
     views.py           public read-only + JWT admin endpoints
     validators.py      upload allowlists, size caps, filename sanitising
+    sources.py         the watched Facebook pages (edit the list here)
     storage.py         Cloudinary upload/delete, local-disk dev fallback
     throttles.py       upload rate limit
     exceptions.py      uniform { detail, errors } error envelope
-    tests.py           17 tests
+    tests.py           22 tests
     management/commands/ensure_admin.py
   build.sh             Render build: install, collectstatic, migrate, ensure_admin
 

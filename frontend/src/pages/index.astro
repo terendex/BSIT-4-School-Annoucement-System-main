@@ -86,12 +86,20 @@ const pageHref = (target: number) => {
 <style>
   .searchbar {
     display: flex;
+    flex-wrap: wrap;
     gap: 8px;
     margin-bottom: 22px;
   }
 
   .searchbar .input {
     max-width: 380px;
+  }
+
+  @media (max-width: 700px) {
+    .searchbar .input {
+      max-width: none;
+      flex: 1 1 100%;
+    }
   }
 
   .pager {

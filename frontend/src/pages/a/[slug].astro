@@ -33,6 +33,9 @@ const edited =
   description={announcement.excerpt}
   image={cover?.url ?? null}
   imageAlt={cover?.caption || announcement.title}
+  imageWidth={cover?.width ?? null}
+  imageHeight={cover?.height ?? null}
+  imageType={cover?.content_type ?? null}
   canonicalPath={canonicalPath}
   ogType="article"
   publishedTime={announcement.published_at ?? announcement.created_at}
@@ -47,6 +50,20 @@ const edited =
         Posted <time datetime={announcement.published_at ?? announcement.created_at}>{posted}</time>
         {edited && <> &middot; updated {edited}</>}
       </p>
+      {
+        announcement.source_page_name && (
+          <p class="announcement__source">
+            Re-posted from{" "}
+            {announcement.source_url ? (
+              <a href={announcement.source_url} target="_blank" rel="noopener noreferrer">
+                {announcement.source_page_name}
+              </a>
+            ) : (
+              announcement.source_page_name
+            )}
+          </p>
+        )
+      }
     </header>
 
     {bodyHtml && <div class="prose" set:html={bodyHtml} />}
@@ -123,6 +140,19 @@ const edited =
     transform: scale(1.03);
   }
 
+  /* A lone poster is the announcement - show it whole, never cropped. */
+  .gallery--single {
+    grid-template-columns: minmax(0, 480px);
+  }
+
+  .gallery--single .gallery__button img {
+    aspect-ratio: auto;
+    max-height: 76vh;
+    max-height: 76dvh;
+    object-fit: contain;
+    background: var(--navy-50);
+  }
+
   .gallery__caption {
     margin: 6px 2px 0;
     font-size: 0.82rem;
@@ -151,6 +181,7 @@ const edited =
   .lightbox__image {
     max-width: 100%;
     max-height: 78vh;
+    max-height: 78dvh;
     object-fit: contain;
     border-radius: 6px;
     box-shadow: var(--shadow-lg);
@@ -207,6 +238,12 @@ const edited =
     right: 14px;
     top: 50%;
     transform: translateY(-50%);
+  }
+
+  .announcement__source {
+    margin: 8px 0 0;
+    font-size: 0.84rem;
+    color: var(--muted);
   }
 
   .sharebar {

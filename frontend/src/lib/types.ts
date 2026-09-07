@@ -23,6 +23,9 @@ export interface AnnouncementSummary {
   cover_image: Attachment | null;
   image_count: number;
   file_count: number;
+  source_page: string;
+  source_page_name: string;
+  source_url: string;
   published_at: string | null;
   created_at: string;
   updated_at: string;

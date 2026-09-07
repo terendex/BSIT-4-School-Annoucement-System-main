@@ -156,6 +156,24 @@ export interface AnnouncementInput {
   body: string;
   published: boolean;
   slug?: string;
+  source_page?: string;
+  source_url?: string;
+}
+
+export interface SourcePage {
+  slug: string;
+  name: string;
+  url: string;
+}
+
+/** The watched Facebook pages, served by the API so the list has one home. */
+export async function fetchSourcePages(): Promise<SourcePage[]> {
+  const response = await fetch(`${API_BASE_URL}/api/source-pages/`, {
+    headers: { Accept: "application/json" },
+  });
+  if (!response.ok) return [];
+  const data = await response.json();
+  return (data.results ?? []) as SourcePage[];
 }
 
 export const createAnnouncement = (input: AnnouncementInput) =>

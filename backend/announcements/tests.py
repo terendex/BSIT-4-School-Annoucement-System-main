@@ -37,6 +37,21 @@ class SlugTests(TestCase):
     def test_untitled_slug_falls_back(self):
         self.assertEqual(unique_slug("!!!", Announcement.objects.all()), "announcement")
 
+    def test_excerpt_flattens_tables(self):
+        # Excerpts double as the Messenger preview text, so a schedule table
+        # must not arrive as a wall of pipes.
+        a = Announcement.objects.create(
+            title="T",
+            body="| Item | Amount |\n|---|---|\n| Individual | PHP 50 |",
+        )
+        self.assertEqual(a.excerpt, "Item - Amount Individual - PHP 50")
+
+    def test_excerpt_keeps_pipes_that_are_not_a_table(self):
+        a = Announcement.objects.create(
+            title="T", body="SUNDAY STARLIGHT || September Mass"
+        )
+        self.assertEqual(a.excerpt, "SUNDAY STARLIGHT || September Mass")
+
     def test_excerpt_strips_markdown(self):
         a = Announcement.objects.create(
             title="T", body="# Heading\n\nSee **this** [link](http://x.test) now."
@@ -199,6 +214,72 @@ class AdminApiTests(TestCase):
         self.assertNotIn("/", stored)
         self.assertNotIn("..", stored)
         self.assertTrue(stored.endswith(".png"))
+
+
+class SourcePageTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        self.client = APIClient()
+        self.admin = User.objects.create_user(
+            username="admin", password=ADMIN_PASSWORD, is_staff=True, is_superuser=True
+        )
+        response = self.client.post(
+            reverse("login"),
+            {"username": "admin", "password": ADMIN_PASSWORD},
+            format="json",
+        )
+        self.client.credentials(HTTP_AUTHORIZATION="Bearer " + response.data["access"])
+
+    def test_source_pages_are_listed_publicly(self):
+        response = APIClient().get(reverse("source-pages"))
+        self.assertEqual(response.status_code, 200)
+        slugs = [page["slug"] for page in response.data["results"]]
+        self.assertIn("sits.slclu", slugs)
+        self.assertEqual(len(slugs), 6)
+
+    def test_announcement_records_its_source(self):
+        response = self.client.post(
+            reverse("admin-announcement-list"),
+            {
+                "title": "SITS Mass Sponsorship",
+                "body": "September Mass Sponsorship.",
+                "published": True,
+                "source_page": "sits.slclu",
+                "source_url": "https://www.facebook.com/sits.slclu/posts/123",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(response.data["source_page"], "sits.slclu")
+        self.assertEqual(
+            response.data["source_page_name"],
+            "Society of Information Technology Students - SLC La Union",
+        )
+
+    def test_unknown_source_page_is_rejected(self):
+        response = self.client.post(
+            reverse("admin-announcement-list"),
+            {"title": "Nope", "published": True, "source_page": "some-random-page"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_source_url_must_be_http(self):
+        response = self.client.post(
+            reverse("admin-announcement-list"),
+            {"title": "Nope", "published": True, "source_url": "javascript:alert(1)"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_source_is_optional(self):
+        response = self.client.post(
+            reverse("admin-announcement-list"),
+            {"title": "Plain post", "published": True},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(response.data["source_page"], "")
 
 
 class AttachmentModelTests(TestCase):

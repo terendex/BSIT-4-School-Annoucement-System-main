@@ -50,6 +50,8 @@ body {
   color: var(--ink);
   background: var(--canvas);
   min-height: 100vh;
+  /* dvh tracks the shrinking/growing mobile address bar. */
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
 }
@@ -401,10 +403,23 @@ h3 {
   color: inherit;
 }
 
+.prose__scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin: 1.2em 0;
+}
+
 .prose table {
   border-collapse: collapse;
   width: 100%;
   font-size: 0.94rem;
+}
+
+/* Inside the scroller a table sizes to its content instead of squeezing. */
+.prose__scroll table {
+  width: auto;
+  min-width: 100%;
+  margin: 0;
 }
 
 .prose th,
@@ -629,7 +644,38 @@ h3 {
   color: #145c37;
 }
 
+/* Phones and touch screens: finger-sized controls, and 16px form text so
+   iOS Safari does not zoom in when a field is focused. */
+@media (max-width: 700px), (pointer: coarse) {
+  .btn,
+  .btn--sm {
+    min-height: 44px;
+  }
+
+  .input,
+  .select,
+  .textarea {
+    font-size: 16px;
+  }
+
+  .site-header__nav a {
+    padding: 11px 16px;
+  }
+
+  .back-link {
+    padding: 10px 0;
+  }
+
+  .file {
+    padding: 14px;
+  }
+}
+
 @media (max-width: 640px) {
+  .textarea {
+    min-height: 150px;
+  }
+
   .card__link {
     grid-template-columns: 1fr;
   }
