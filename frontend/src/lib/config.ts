@@ -43,7 +43,7 @@ export const FB_APP_ID = import.meta.env.PUBLIC_FB_APP_ID || "";
 
 export const SITE_TAGLINE =
   import.meta.env.PUBLIC_SITE_TAGLINE ||
-  "Announcements for BSIT students - Saint Louis College, City of San Fernando, La Union.";
+  "Announcements for BSIT Students- Saint Louis College, City of San Fernando, La Union.";
 
 /** Logo lives in /public and doubles as the Open Graph fallback image. */
 export const LOGO_PATH = "/logo.png";
