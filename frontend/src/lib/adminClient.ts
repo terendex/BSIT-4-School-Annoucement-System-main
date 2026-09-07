@@ -7,7 +7,14 @@
  * localStorage.
  */
 import { API_BASE_URL } from "./config";
-import type { Announcement, AdminUser, Attachment, Paginated } from "./types";
+import type {
+  Announcement,
+  AdminUser,
+  Attachment,
+  Paginated,
+  Publisher,
+  Taxonomy,
+} from "./types";
 
 const REFRESH_KEY = "slc.admin.refresh";
 
@@ -121,11 +128,15 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
 // --------------------------------------------------------------------------
 // Auth
 // --------------------------------------------------------------------------
-export async function signIn(username: string, password: string): Promise<AdminUser> {
+/**
+ * Sign in with an email address. The API field is still called `username`
+ * because the bootstrap admin account may not have an email set.
+ */
+export async function signIn(email: string, password: string): Promise<AdminUser> {
   const response = await fetch(`${API_BASE_URL}/api/auth/login/`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ username, password }),
+    body: JSON.stringify({ username: email, password }),
   });
   if (!response.ok) throw await parseError(response);
 
@@ -133,6 +144,28 @@ export async function signIn(username: string, password: string): Promise<AdminU
   accessToken = data.access;
   writeRefresh(data.refresh);
   return data.user as AdminUser;
+}
+
+/**
+ * Replace your password - forced after an invite, optional afterwards.
+ *
+ * The API returns a fresh token pair, because changing the password
+ * invalidates the one used to make this very call.
+ */
+export async function changePassword(
+  currentPassword: string,
+  newPassword: string
+): Promise<AdminUser> {
+  const data = await request<{ access: string; refresh: string; user: AdminUser }>(
+    "/api/auth/change-password/",
+    {
+      method: "POST",
+      body: { current_password: currentPassword, new_password: newPassword },
+    }
+  );
+  accessToken = data.access;
+  writeRefresh(data.refresh);
+  return data.user;
 }
 
 export function signOut(): void {
@@ -145,9 +178,19 @@ export const fetchMe = () => request<AdminUser>("/api/auth/me/");
 // --------------------------------------------------------------------------
 // Announcements
 // --------------------------------------------------------------------------
-export function listAll(page = 1, search = "") {
+export interface AdminListFilters {
+  search?: string;
+  category?: string;
+  year?: string;
+  mine?: boolean;
+}
+
+export function listAll(page = 1, filters: AdminListFilters = {}) {
   const params = new URLSearchParams({ page: String(page), page_size: "20" });
-  if (search) params.set("q", search);
+  if (filters.search) params.set("q", filters.search);
+  if (filters.category) params.set("category", filters.category);
+  if (filters.year) params.set("year", filters.year);
+  if (filters.mine) params.set("mine", "true");
   return request<Paginated<Announcement>>(`/api/admin/announcements/?${params}`);
 }
 
@@ -155,6 +198,8 @@ export interface AnnouncementInput {
   title: string;
   body: string;
   published: boolean;
+  category?: string;
+  year_level?: string;
   slug?: string;
   source_page?: string;
   source_url?: string;
@@ -212,3 +257,47 @@ export const deleteAttachment = (id: number) =>
 
 export const updateAttachment = (id: number, data: { caption?: string; order?: number }) =>
   request<Attachment>(`/api/admin/attachments/${id}/`, { method: "PATCH", body: data });
+
+// --------------------------------------------------------------------------
+// Taxonomy
+// --------------------------------------------------------------------------
+const EMPTY_TAXONOMY: Taxonomy = { categories: [], year_levels: [] };
+
+/** Categories and year levels, so labels live in one place - the API. */
+export async function fetchTaxonomy(): Promise<Taxonomy> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/taxonomy/`, {
+      headers: { Accept: "application/json" },
+    });
+    if (!response.ok) return EMPTY_TAXONOMY;
+    return (await response.json()) as Taxonomy;
+  } catch {
+    return EMPTY_TAXONOMY;
+  }
+}
+
+// --------------------------------------------------------------------------
+// Publishers (admin only)
+// --------------------------------------------------------------------------
+export async function listPublishers(): Promise<Publisher[]> {
+  const data = await request<{ results: Publisher[] }>("/api/admin/publishers/");
+  return data.results;
+}
+
+/** Create the account and mail the temporary password. */
+export const invitePublisher = (email: string, fullName = "") =>
+  request<Publisher>("/api/admin/publishers/", {
+    method: "POST",
+    body: { email, full_name: fullName },
+  });
+
+export const resendInvite = (id: number) =>
+  request<Publisher>(`/api/admin/publishers/${id}/resend-invite/`, { method: "POST" });
+
+export const updatePublisher = (
+  id: number,
+  data: { is_active?: boolean; full_name?: string }
+) => request<Publisher>(`/api/admin/publishers/${id}/`, { method: "PATCH", body: data });
+
+export const deletePublisher = (id: number) =>
+  request<void>(`/api/admin/publishers/${id}/`, { method: "DELETE" });

@@ -5,9 +5,11 @@ import type { AnnouncementSummary } from "../lib/types";
 
 interface Props {
   announcement: AnnouncementSummary;
+  /** Category tone lookup, so the badge colour matches the filter bar. */
+  tone?: string;
 }
 
-const { announcement } = Astro.props;
+const { announcement, tone = "neutral" } = Astro.props;
 const cover = announcement.cover_image;
 const posted = formatDateTime(announcement.published_at ?? announcement.created_at);
 ---
@@ -23,6 +25,12 @@ const posted = formatDateTime(announcement.published_at ?? announcement.created_
       />
     </div>
     <div class="card__body">
+      <div class="card__badges">
+        <span class={`tag tag--${tone}`}>{announcement.category_name}</span>
+        {announcement.year_level !== "all" && (
+          <span class="tag">{announcement.year_level_name}</span>
+        )}
+      </div>
       <h2 class="card__title">{announcement.title}</h2>
       {announcement.excerpt && <p class="card__excerpt">{announcement.excerpt}</p>}
       <div class="card__meta">

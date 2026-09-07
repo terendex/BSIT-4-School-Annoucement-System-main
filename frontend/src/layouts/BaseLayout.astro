@@ -32,6 +32,8 @@ interface Props {
   refreshSignature?: string | null;
   /** Set on an announcement page so it watches that post specifically. */
   refreshSlug?: string;
+  /** Active list filters, so polling asks about the same subset. */
+  refreshQuery?: string;
 }
 
 const {
@@ -49,6 +51,7 @@ const {
   noindex = false,
   refreshSignature = null,
   refreshSlug,
+  refreshQuery,
 } = Astro.props;
 
 const pageTitle = title === SITE_NAME ? title : `${title} | ${SITE_NAME}`;
@@ -116,7 +119,12 @@ const ogDescription = description.length > 200 ? `${description.slice(0, 197)}..
     <Header />
     {
       refreshSignature && (
-        <AutoRefresh initial={refreshSignature} slug={refreshSlug} client:idle />
+        <AutoRefresh
+          initial={refreshSignature}
+          slug={refreshSlug}
+          query={refreshQuery}
+          client:idle
+        />
       )
     }
     <main class="main">

@@ -1,18 +1,23 @@
 import io
+import json
+import re
 import sys
 import tempfile
 from unittest import mock
 
 from django.contrib.auth import get_user_model
-from django.core import checks
+from django.contrib.auth.password_validation import validate_password
+from django.core import checks, mail
 from django.core.cache import cache
+from django.utils import timezone
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from PIL import Image
 from rest_framework.test import APIClient
 
 from .checks import database_is_persistent_in_production
-from .models import Announcement, Attachment, unique_slug
+from .models import Announcement, Attachment, Profile, unique_slug
+from .passwords import generate_temp_password
 
 User = get_user_model()
 
@@ -404,3 +409,531 @@ class DatabasePersistenceCheckTests(TestCase):
     @override_settings(DEBUG=False, DATABASES=SQLITE)
     def test_the_test_runner_is_left_alone(self):
         self.assertEqual(self.run_check(("manage.py", "test")), [])
+
+
+# --------------------------------------------------------------------------
+# Roles, invites and password rules
+# --------------------------------------------------------------------------
+PUBLISHER_PASSWORD = "Publisher-9!pass"
+LOCMEM_EMAIL = "django.core.mail.backends.locmem.EmailBackend"
+
+
+class RoleTestCase(TestCase):
+    """Shared setup: one admin, one publisher, both past their first login."""
+
+    def setUp(self):
+        cache.clear()
+        mail.outbox = []
+        self.client = APIClient()
+
+        self.admin = User.objects.create_user(
+            username="admin", email="admin@slc.test",
+            password=ADMIN_PASSWORD, is_staff=True, is_superuser=True,
+        )
+        Profile.objects.create(user=self.admin, role=Profile.Role.ADMIN)
+
+        self.publisher = User.objects.create_user(
+            username="juan@gmail.test", email="juan@gmail.test",
+            password=PUBLISHER_PASSWORD, is_staff=True, is_superuser=False,
+        )
+        Profile.objects.create(
+            user=self.publisher, role=Profile.Role.PUBLISHER, full_name="Juan Dela Cruz"
+        )
+
+    def sign_in(self, identifier, password):
+        return self.client.post(
+            reverse("login"), {"username": identifier, "password": password},
+            format="json",
+        )
+
+    def as_user(self, identifier, password):
+        response = self.sign_in(identifier, password)
+        self.assertEqual(response.status_code, 200, response.data)
+        self.client.credentials(HTTP_AUTHORIZATION="Bearer " + response.data["access"])
+        return response.data
+
+    def logout(self):
+        self.client.credentials()
+
+
+class LoginIdentityTests(RoleTestCase):
+    def test_publisher_signs_in_with_their_email(self):
+        data = self.as_user("juan@gmail.test", PUBLISHER_PASSWORD)
+        self.assertEqual(data["user"]["role"], "publisher")
+        self.assertEqual(data["user"]["full_name"], "Juan Dela Cruz")
+
+    def test_email_is_case_insensitive(self):
+        self.assertEqual(self.sign_in("JUAN@GMAIL.TEST", PUBLISHER_PASSWORD).status_code, 200)
+
+    def test_bootstrap_admin_can_still_use_its_username(self):
+        # The original admin may have been created before invites existed.
+        response = self.sign_in("admin", ADMIN_PASSWORD)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["user"]["role"], "admin")
+
+    def test_admin_can_also_use_their_email(self):
+        self.assertEqual(self.sign_in("admin@slc.test", ADMIN_PASSWORD).status_code, 200)
+
+    def test_unknown_email_and_wrong_password_look_identical(self):
+        unknown = self.sign_in("nobody@gmail.test", "whatever-1A!")
+        wrong = self.sign_in("juan@gmail.test", "wrong-password-1A!")
+        self.assertEqual(unknown.status_code, 401)
+        self.assertEqual(wrong.status_code, 401)
+        self.assertEqual(unknown.data["detail"], wrong.data["detail"])
+
+    def test_deactivated_publisher_cannot_sign_in(self):
+        self.publisher.is_active = False
+        self.publisher.save(update_fields=["is_active"])
+        self.assertEqual(self.sign_in("juan@gmail.test", PUBLISHER_PASSWORD).status_code, 401)
+
+
+class PublisherPermissionTests(RoleTestCase):
+    def setUp(self):
+        super().setUp()
+        self.own = Announcement.objects.create(title="Mine", author=self.publisher)
+        self.other = Announcement.objects.create(title="Theirs", author=self.admin)
+
+    def test_publisher_can_create(self):
+        self.as_user("juan@gmail.test", PUBLISHER_PASSWORD)
+        response = self.client.post(
+            reverse("admin-announcement-list"),
+            {"title": "Org meeting", "body": "Later today.", "published": True,
+             "category": "event", "year_level": "4"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(
+            Announcement.objects.get(pk=response.data["id"]).author, self.publisher
+        )
+
+    def test_publisher_can_edit_their_own(self):
+        self.as_user("juan@gmail.test", PUBLISHER_PASSWORD)
+        response = self.client.patch(
+            reverse("admin-announcement-detail", args=[self.own.pk]),
+            {"title": "Mine, fixed"}, format="json",
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+
+    def test_publisher_cannot_edit_someone_elses(self):
+        self.as_user("juan@gmail.test", PUBLISHER_PASSWORD)
+        response = self.client.patch(
+            reverse("admin-announcement-detail", args=[self.other.pk]),
+            {"title": "Hijacked"}, format="json",
+        )
+        self.assertEqual(response.status_code, 403)
+        self.other.refresh_from_db()
+        self.assertEqual(self.other.title, "Theirs")
+
+    def test_publisher_cannot_delete_even_their_own(self):
+        self.as_user("juan@gmail.test", PUBLISHER_PASSWORD)
+        response = self.client.delete(
+            reverse("admin-announcement-detail", args=[self.own.pk])
+        )
+        self.assertEqual(response.status_code, 403)
+        self.assertTrue(Announcement.objects.filter(pk=self.own.pk).exists())
+
+    def test_admin_can_edit_and_delete_anyones(self):
+        self.as_user("admin", ADMIN_PASSWORD)
+        edit = self.client.patch(
+            reverse("admin-announcement-detail", args=[self.own.pk]),
+            {"title": "Edited by admin"}, format="json",
+        )
+        self.assertEqual(edit.status_code, 200, edit.data)
+        delete = self.client.delete(reverse("admin-announcement-detail", args=[self.own.pk]))
+        self.assertEqual(delete.status_code, 204)
+
+    def test_publisher_sees_the_whole_board(self):
+        # They need to know what has been posted before adding to it.
+        self.as_user("juan@gmail.test", PUBLISHER_PASSWORD)
+        response = self.client.get(reverse("admin-announcement-list"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["count"], 2)
+
+    def test_publisher_cannot_manage_publishers(self):
+        self.as_user("juan@gmail.test", PUBLISHER_PASSWORD)
+        self.assertEqual(self.client.get(reverse("publisher-list")).status_code, 403)
+        self.assertEqual(
+            self.client.post(
+                reverse("publisher-list"), {"email": "x@y.test"}, format="json"
+            ).status_code,
+            403,
+        )
+
+
+@override_settings(EMAIL_BACKEND=LOCMEM_EMAIL)
+class InviteFlowTests(RoleTestCase):
+    def invite(self, email="maria@gmail.test", full_name="Maria Santos"):
+        self.as_user("admin", ADMIN_PASSWORD)
+        return self.client.post(
+            reverse("publisher-list"), {"email": email, "full_name": full_name},
+            format="json",
+        )
+
+    def temp_password_from_email(self):
+        """Pull the generated password back out of the invite that was sent."""
+        self.assertEqual(len(mail.outbox), 1, "no invite email was sent")
+        body = mail.outbox[0].body
+        match = re.search(r"Temporary password: (\S+)", body)
+        self.assertIsNotNone(match, body)
+        return match.group(1)
+
+    def test_admin_invites_a_publisher_and_the_email_goes_out(self):
+        response = self.invite()
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(response.data["role"], "publisher")
+        self.assertTrue(response.data["must_change_password"])
+        self.assertTrue(response.data["invite_email_sent"])
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ["maria@gmail.test"])
+
+    def test_the_generated_password_is_never_in_the_api_response(self):
+        response = self.invite()
+        password = self.temp_password_from_email()
+        self.assertNotIn(password, json.dumps(response.data))
+
+    def test_invited_publisher_signs_in_and_is_forced_to_change(self):
+        self.invite()
+        password = self.temp_password_from_email()
+        self.logout()
+
+        signed_in = self.as_user("maria@gmail.test", password)
+        self.assertTrue(signed_in["user"]["must_change_password"])
+
+        # Holding only a temporary password, every other endpoint is shut.
+        self.assertEqual(self.client.get(reverse("admin-announcement-list")).status_code, 403)
+        posting = self.client.post(
+            reverse("admin-announcement-list"), {"title": "Sneaky"}, format="json"
+        )
+        self.assertEqual(posting.status_code, 403)
+
+    def test_changing_the_password_opens_the_dashboard(self):
+        self.invite()
+        password = self.temp_password_from_email()
+        self.logout()
+        self.as_user("maria@gmail.test", password)
+
+        changed = self.client.post(
+            reverse("change-password"),
+            {"current_password": password, "new_password": "Maria-Sept-2026!"},
+            format="json",
+        )
+        self.assertEqual(changed.status_code, 200, changed.data)
+        self.assertFalse(changed.data["user"]["must_change_password"])
+
+        # The response carries fresh tokens, so there is no bounce to /login.
+        self.client.credentials(HTTP_AUTHORIZATION="Bearer " + changed.data["access"])
+        self.assertEqual(self.client.get(reverse("admin-announcement-list")).status_code, 200)
+
+    def test_the_temporary_password_stops_working_after_the_change(self):
+        self.invite()
+        password = self.temp_password_from_email()
+        self.logout()
+        self.as_user("maria@gmail.test", password)
+        self.client.post(
+            reverse("change-password"),
+            {"current_password": password, "new_password": "Maria-Sept-2026!"},
+            format="json",
+        )
+        self.logout()
+        cache.clear()
+        self.assertEqual(self.sign_in("maria@gmail.test", password).status_code, 401)
+        self.assertEqual(self.sign_in("maria@gmail.test", "Maria-Sept-2026!").status_code, 200)
+
+    def test_an_expired_invite_is_refused_with_an_explanation(self):
+        self.invite()
+        password = self.temp_password_from_email()
+        self.logout()
+
+        profile = Profile.objects.get(user__email="maria@gmail.test")
+        profile.temp_password_expires_at = timezone.now() - timezone.timedelta(minutes=1)
+        profile.save(update_fields=["temp_password_expires_at"])
+
+        response = self.sign_in("maria@gmail.test", password)
+        self.assertEqual(response.status_code, 403)
+        self.assertIn("expired", response.data["detail"].lower())
+
+    def test_resending_an_invite_replaces_the_old_password(self):
+        self.invite()
+        first = self.temp_password_from_email()
+        mail.outbox = []
+
+        user = User.objects.get(email="maria@gmail.test")
+        resend = self.client.post(reverse("publisher-resend-invite", args=[user.pk]))
+        self.assertEqual(resend.status_code, 200, resend.data)
+        second = self.temp_password_from_email()
+
+        self.assertNotEqual(first, second)
+        self.logout()
+        cache.clear()
+        self.assertEqual(self.sign_in("maria@gmail.test", first).status_code, 401)
+        self.assertEqual(self.sign_in("maria@gmail.test", second).status_code, 200)
+
+    def test_the_same_email_cannot_be_invited_twice(self):
+        self.invite()
+        again = self.client.post(
+            reverse("publisher-list"), {"email": "maria@gmail.test"}, format="json"
+        )
+        self.assertEqual(again.status_code, 400)
+
+    def test_admin_cannot_delete_their_own_account(self):
+        self.as_user("admin", ADMIN_PASSWORD)
+        response = self.client.delete(reverse("publisher-detail", args=[self.admin.pk]))
+        self.assertEqual(response.status_code, 403)
+
+    def test_deleting_a_publisher_leaves_their_announcements_up(self):
+        # A class suspension notice must not vanish because someone left.
+        notice = Announcement.objects.create(
+            title="No classes tomorrow", author=self.publisher, category="suspension"
+        )
+        self.as_user("admin", ADMIN_PASSWORD)
+        response = self.client.delete(reverse("publisher-detail", args=[self.publisher.pk]))
+        self.assertEqual(response.status_code, 204)
+
+        notice.refresh_from_db()
+        self.assertIsNone(notice.author)
+        self.assertTrue(Announcement.objects.filter(pk=notice.pk).exists())
+
+    def test_deactivating_keeps_the_account_and_its_posts(self):
+        self.as_user("admin", ADMIN_PASSWORD)
+        response = self.client.patch(
+            reverse("publisher-detail", args=[self.publisher.pk]),
+            {"is_active": False}, format="json",
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        self.publisher.refresh_from_db()
+        self.assertFalse(self.publisher.is_active)
+
+
+class PasswordRuleTests(RoleTestCase):
+    def change_to(self, new_password, current=PUBLISHER_PASSWORD):
+        cache.clear()
+        self.as_user("juan@gmail.test", PUBLISHER_PASSWORD)
+        return self.client.post(
+            reverse("change-password"),
+            {"current_password": current, "new_password": new_password},
+            format="json",
+        )
+
+    def test_a_strong_password_is_accepted(self):
+        self.assertEqual(self.change_to("Tinta-Sept-2026!").status_code, 200)
+
+    def test_too_short_is_rejected(self):
+        self.assertEqual(self.change_to("Ab1!xy").status_code, 400)
+
+    def test_no_symbol_is_rejected(self):
+        self.assertEqual(self.change_to("Announcement2026").status_code, 400)
+
+    def test_no_uppercase_is_rejected(self):
+        self.assertEqual(self.change_to("announcement-2026!").status_code, 400)
+
+    def test_no_digit_is_rejected(self):
+        self.assertEqual(self.change_to("Announcements!!").status_code, 400)
+
+    def test_all_numeric_is_rejected(self):
+        self.assertEqual(self.change_to("09171234567").status_code, 400)
+
+    def test_a_common_password_in_disguise_is_rejected(self):
+        # Each of these clears length and the character mix, and each is one of
+        # the first guesses an attacker makes.
+        for candidate in ("Password123!", "Welcome123!", "Qwerty2026!"):
+            with self.subTest(password=candidate):
+                self.assertEqual(self.change_to(candidate).status_code, 400)
+
+    def test_reusing_the_current_password_is_rejected(self):
+        self.assertEqual(self.change_to(PUBLISHER_PASSWORD).status_code, 400)
+
+    def test_the_wrong_current_password_is_rejected(self):
+        response = self.change_to("Tinta-Sept-2026!", current="not-my-password-1A!")
+        self.assertEqual(response.status_code, 400)
+
+    def test_generated_temp_passwords_always_satisfy_the_rules(self):
+        # An invite that cannot be used is worse than no invite at all.
+        for _unused in range(50):
+            validate_password(generate_temp_password(), user=self.publisher)
+
+
+class TaxonomyFilterTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        self.client = APIClient()
+        self.suspension = Announcement.objects.create(
+            title="No classes", category="suspension", year_level="all"
+        )
+        self.exam_4th = Announcement.objects.create(
+            title="Prelims for 4th year", category="exam", year_level="4"
+        )
+        self.exam_1st = Announcement.objects.create(
+            title="Prelims for 1st year", category="exam", year_level="1"
+        )
+        self.draft = Announcement.objects.create(
+            title="Draft holiday", category="holiday", published=False
+        )
+
+    def titles(self, query=""):
+        response = self.client.get(reverse("public-announcement-list") + query)
+        self.assertEqual(response.status_code, 200)
+        return {item["title"] for item in response.data["results"]}
+
+    def test_defaults_are_applied(self):
+        fresh = Announcement.objects.create(title="Plain")
+        self.assertEqual(fresh.category, "general")
+        self.assertEqual(fresh.year_level, "all")
+
+    def test_filtering_by_category(self):
+        self.assertEqual(
+            self.titles("?category=exam"),
+            {"Prelims for 4th year", "Prelims for 1st year"},
+        )
+
+    def test_filtering_by_year_keeps_all_year_posts(self):
+        # A 4th year student must still see a campus-wide suspension.
+        self.assertEqual(self.titles("?year=4"), {"Prelims for 4th year", "No classes"})
+
+    def test_the_two_filters_combine(self):
+        self.assertEqual(self.titles("?category=exam&year=1"), {"Prelims for 1st year"})
+
+    def test_year_all_means_no_narrowing(self):
+        self.assertEqual(len(self.titles("?year=all")), 3)
+
+    def test_filters_never_reveal_drafts(self):
+        self.assertNotIn("Draft holiday", self.titles("?category=holiday"))
+
+    def test_an_unknown_filter_value_returns_nothing_rather_than_everything(self):
+        self.assertEqual(self.titles("?category=nonsense"), set())
+
+    def test_feed_state_follows_the_same_filters(self):
+        response = self.client.get(reverse("feed-state") + "?category=exam")
+        self.assertEqual(response.data["count"], 2)
+
+    def test_taxonomy_endpoint_lists_both_axes(self):
+        response = self.client.get(reverse("taxonomy"))
+        self.assertEqual(response.status_code, 200)
+        categories = {item["slug"] for item in response.data["categories"]}
+        self.assertIn("suspension", categories)
+        self.assertIn("holiday", categories)
+        self.assertEqual(
+            [item["slug"] for item in response.data["year_levels"]],
+            ["all", "1", "2", "3", "4"],
+        )
+
+    def test_the_editor_rejects_a_category_that_is_not_ours(self):
+        admin = User.objects.create_user(
+            username="boss", password=ADMIN_PASSWORD, is_staff=True, is_superuser=True
+        )
+        self.client.force_authenticate(user=admin)
+        response = self.client.post(
+            reverse("admin-announcement-list"),
+            {"title": "Bad filing", "category": "made-up"}, format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+
+
+class FeedStateAgreementTests(TestCase):
+    """feed-state must answer exactly what the list view was asked.
+
+    The homepage renders feed-state's answer as its fingerprint and AutoRefresh
+    polls the same endpoint every minute. If the two ever disagree for a slice
+    the reader is looking at, the page reloads, renders the same mismatch, and
+    reloads again - a loop that only ends when the tab is closed.
+    """
+
+    def setUp(self):
+        cache.clear()
+        self.client = APIClient()
+        for index in range(3):
+            Announcement.objects.create(
+                title=f"Exam notice {index}", category="exam", year_level="1"
+            )
+        Announcement.objects.create(title="Holiday notice", category="holiday")
+        Announcement.objects.create(title="Hidden draft", published=False)
+
+    def assert_agrees(self, query=""):
+        """The two endpoints must describe the same set of announcements."""
+        listing = self.client.get(reverse("public-announcement-list") + query)
+        state = self.client.get(reverse("feed-state") + query)
+        self.assertEqual(listing.status_code, 200)
+        self.assertEqual(state.status_code, 200)
+
+        self.assertEqual(
+            listing.data["count"],
+            state.data["count"],
+            f"feed-state counted {state.data['count']} where the list showed "
+            f"{listing.data['count']} for {query!r} - the page would reload for ever",
+        )
+        # And the timestamp has to be the newest across the whole filtered set,
+        # not merely the rows that fitted on this page.
+        newest = max(
+            (row["updated_at"] for row in listing.data["results"]), default=None
+        )
+        self.assertEqual(state.data["last_modified"], newest, f"drift for {query!r}")
+
+    def test_agrees_with_no_filters(self):
+        self.assert_agrees()
+
+    def test_agrees_when_searching(self):
+        # The bug: feed-state ignored q, so any search left a permanent
+        # mismatch and the page reloaded every minute.
+        self.assert_agrees("?q=Exam")
+
+    def test_agrees_when_filtering_by_category(self):
+        self.assert_agrees("?category=exam")
+
+    def test_agrees_when_filtering_by_year(self):
+        self.assert_agrees("?year=1")
+
+    def test_agrees_with_every_filter_at_once(self):
+        self.assert_agrees("?q=notice&category=exam&year=1")
+
+    def test_search_is_actually_applied(self):
+        response = self.client.get(reverse("feed-state") + "?q=Holiday")
+        self.assertEqual(response.data["count"], 1)
+
+    def test_drafts_are_never_counted(self):
+        response = self.client.get(reverse("feed-state"))
+        self.assertEqual(response.data["count"], 4)
+
+    def test_the_fingerprint_moves_when_a_post_is_edited(self):
+        before = self.client.get(reverse("feed-state") + "?category=exam").data
+        edited = Announcement.objects.filter(category="exam").first()
+        edited.title = "Exam notice, moved"
+        edited.save()
+        after = self.client.get(reverse("feed-state") + "?category=exam").data
+        self.assertNotEqual(before["last_modified"], after["last_modified"])
+
+    def test_an_edit_outside_the_filter_does_not_move_it(self):
+        # A reader browsing exams should not be reloaded because a holiday
+        # notice was edited.
+        before = self.client.get(reverse("feed-state") + "?category=exam").data
+        holiday = Announcement.objects.get(title="Holiday notice")
+        holiday.title = "Holiday notice, edited"
+        holiday.save()
+        after = self.client.get(reverse("feed-state") + "?category=exam").data
+        self.assertEqual(before, after)
+
+
+class InviteEdgeCaseTests(RoleTestCase):
+    def test_an_email_too_long_for_the_username_column_is_a_field_error(self):
+        # username is 150 wide and the address doubles as it; without the
+        # guard this was a database error, not a validation message.
+        self.as_user("admin", ADMIN_PASSWORD)
+        response = self.client.post(
+            reverse("publisher-list"),
+            {"email": "a" * 200 + "@gmail.test"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("email", response.data.get("errors", response.data))
+
+    def test_password_changes_are_not_on_the_login_throttle(self):
+        # Fumbling the password rules must not lock someone out of finishing
+        # their own onboarding.
+        self.as_user("juan@gmail.test", PUBLISHER_PASSWORD)
+        for attempt in range(8):
+            response = self.client.post(
+                reverse("change-password"),
+                {"current_password": PUBLISHER_PASSWORD, "new_password": "weak"},
+                format="json",
+            )
+            self.assertEqual(
+                response.status_code, 400, f"throttled on attempt {attempt + 1}"
+            )

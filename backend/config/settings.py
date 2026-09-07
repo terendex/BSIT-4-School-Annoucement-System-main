@@ -141,6 +141,8 @@ AUTH_PASSWORD_VALIDATORS = [
     },
     {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
+    {"NAME": "announcements.passwords.ComplexityValidator"},
+    {"NAME": "announcements.passwords.CommonPasswordVariationValidator"},
 ]
 
 # --------------------------------------------------------------------------
@@ -184,6 +186,36 @@ if CLOUDINARY_ENABLED:
     )
 
 # --------------------------------------------------------------------------
+# Email - Gmail SMTP, used to send publisher invites
+# --------------------------------------------------------------------------
+# EMAIL_HOST_PASSWORD must be a Google "App Password" (16 characters, generated
+# at myaccount.google.com/apppasswords with 2-Step Verification on). A normal
+# Gmail password will be refused by the SMTP server.
+SITE_NAME = os.getenv("SITE_NAME", "SLC Announcements").strip()
+EMAIL_HOST = os.getenv("EMAIL_HOST", "smtp.gmail.com").strip()
+EMAIL_PORT = int(os.getenv("EMAIL_PORT", "587"))
+EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "").strip()
+EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
+EMAIL_USE_TLS = env_bool("EMAIL_USE_TLS", True)
+EMAIL_TIMEOUT = int(os.getenv("EMAIL_TIMEOUT", "20"))
+EMAIL_ENABLED = bool(EMAIL_HOST_USER and EMAIL_HOST_PASSWORD)
+
+if EMAIL_ENABLED:
+    EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+else:
+    # No credentials: print invites to the console instead of failing. Local
+    # development works, and announcements.checks warns if this happens live.
+    EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+
+DEFAULT_FROM_EMAIL = os.getenv(
+    "DEFAULT_FROM_EMAIL",
+    "{} <{}>".format(SITE_NAME, EMAIL_HOST_USER) if EMAIL_HOST_USER else "webmaster@localhost",
+)
+
+# How long a mailed temporary password stays usable.
+INVITE_EXPIRY_DAYS = int(os.getenv("INVITE_EXPIRY_DAYS", "7"))
+
+# --------------------------------------------------------------------------
 # Upload limits (also enforced per file in announcements/validators.py)
 # --------------------------------------------------------------------------
 MAX_IMAGE_UPLOAD_SIZE = int(os.getenv("MAX_IMAGE_UPLOAD_SIZE", 5 * 1024 * 1024))
@@ -206,6 +238,9 @@ REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_RATES": {
         # Brute-force protection on the admin login endpoint.
         "login": os.getenv("LOGIN_THROTTLE_RATE", "5/min"),
+        # Changing your own password: authenticated, and the current password
+        # is required, so the tight login budget would only punish typos.
+        "password": os.getenv("PASSWORD_THROTTLE_RATE", "20/min"),
         "public": os.getenv("PUBLIC_THROTTLE_RATE", "120/min"),
         "upload": os.getenv("UPLOAD_THROTTLE_RATE", "60/min"),
     },

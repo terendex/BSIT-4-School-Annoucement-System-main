@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useState } from "react";
-import LoginModal from "./LoginModal";
 import Modal from "./Modal";
 import AnnouncementModal from "./AnnouncementModal";
 import AttachmentsModal from "./AttachmentsModal";
+import ChangePasswordForm from "./ChangePasswordForm";
 import ConfirmModal from "./ConfirmModal";
+import PublishersModal from "./PublishersModal";
 import {
   ApiError,
   deleteAnnouncement,
   fetchMe,
+  fetchTaxonomy,
   hasSession,
   listAll,
   signOut,
@@ -15,7 +17,7 @@ import {
 } from "../../lib/adminClient";
 import { SITE_URL } from "../../lib/config";
 import { formatDateTime } from "../../lib/format";
-import type { AdminUser, Announcement } from "../../lib/types";
+import type { AdminUser, Announcement, Taxonomy } from "../../lib/types";
 
 type Dialog =
   | { type: "none" }
@@ -23,22 +25,34 @@ type Dialog =
   | { type: "edit"; announcement: Announcement }
   | { type: "attachments"; announcement: Announcement }
   | { type: "delete"; announcement: Announcement }
-  | { type: "share"; announcement: Announcement };
+  | { type: "share"; announcement: Announcement }
+  | { type: "publishers" }
+  | { type: "password" };
+
+const EMPTY_TAXONOMY: Taxonomy = { categories: [], year_levels: [] };
 
 /**
- * Every admin action happens in a modal - nothing here triggers a full page
- * reload, the list is patched in place after each request.
+ * Every action happens in a modal - nothing here triggers a full page reload,
+ * the list is patched in place after each request.
+ *
+ * What a signed-in person may do depends on their role. The buttons below
+ * follow it, and the API enforces it: a publisher creates announcements and
+ * edits their own, an admin edits and deletes anything and manages accounts.
  */
 export default function AdminDashboard() {
   const [user, setUser] = useState<AdminUser | null>(null);
   const [checking, setChecking] = useState(true);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [taxonomy, setTaxonomy] = useState<Taxonomy>(EMPTY_TAXONOMY);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [search, setSearch] = useState("");
+  const [category, setCategory] = useState("");
+  const [year, setYear] = useState("");
   const [dialog, setDialog] = useState<Dialog>({ type: "none" });
 
+  const isAdmin = user?.role === "admin";
   const close = () => setDialog({ type: "none" });
 
   const flash = (message: string) => {
@@ -46,31 +60,38 @@ export default function AdminDashboard() {
     setTimeout(() => setNotice(""), 4000);
   };
 
-  const load = useCallback(async (query = "") => {
-    setLoading(true);
-    setError("");
-    try {
-      const data = await listAll(1, query);
-      setAnnouncements(data.results);
-    } catch (err) {
-      const apiError = err as ApiError;
-      if (apiError.status === 401) {
-        signOut();
-        setUser(null);
-      } else {
-        setError(apiError.message || "Could not load announcements.");
+  const canEdit = (announcement: Announcement) =>
+    isAdmin || announcement.author === user?.id;
+
+  const load = useCallback(
+    async (filters: { search?: string; category?: string; year?: string } = {}) => {
+      setLoading(true);
+      setError("");
+      try {
+        const data = await listAll(1, filters);
+        setAnnouncements(data.results);
+      } catch (err) {
+        const apiError = err as ApiError;
+        if (apiError.status === 401) {
+          signOut();
+          window.location.href = "/login";
+        } else {
+          setError(apiError.message || "Could not load announcements.");
+        }
+      } finally {
+        setLoading(false);
       }
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    },
+    []
+  );
 
   // Restore an existing session (refresh token in sessionStorage) on mount.
+  // With no session at all, this page is not the place to be.
   useEffect(() => {
     let cancelled = false;
     (async () => {
       if (!hasSession()) {
-        setChecking(false);
+        window.location.href = "/login";
         return;
       }
       try {
@@ -78,6 +99,8 @@ export default function AdminDashboard() {
         if (!cancelled) setUser(me);
       } catch {
         signOut();
+        window.location.href = "/login";
+        return;
       } finally {
         if (!cancelled) setChecking(false);
       }
@@ -88,8 +111,22 @@ export default function AdminDashboard() {
   }, []);
 
   useEffect(() => {
-    if (user) void load();
+    fetchTaxonomy().then(setTaxonomy).catch(() => setTaxonomy(EMPTY_TAXONOMY));
+  }, []);
+
+  // Nothing is fetched while a temporary password is still in force - the API
+  // would refuse it anyway, and an error banner under the password form would
+  // just be noise.
+  useEffect(() => {
+    if (user && !user.must_change_password) void load();
   }, [user, load]);
+
+  const applyFilters = (next: { category?: string; year?: string }) => {
+    const merged = { search, category, year, ...next };
+    setCategory(merged.category);
+    setYear(merged.year);
+    void load(merged);
+  };
 
   const upsert = (saved: Announcement) => {
     setAnnouncements((current) => {
@@ -120,12 +157,27 @@ export default function AdminDashboard() {
     flash(`"${announcement.title}" deleted.`);
   };
 
-  if (checking) {
+  const leave = () => {
+    signOut();
+    window.location.href = "/login";
+  };
+
+  if (checking || !user) {
     return <p className="field__hint">Checking your session...</p>;
   }
 
-  if (!user) {
-    return <LoginModal onSignedIn={setUser} />;
+  // The one thing an invited publisher can do before anything else.
+  if (user.must_change_password) {
+    return (
+      <ChangePasswordForm
+        user={user}
+        forced
+        onChanged={(updated) => {
+          setUser(updated);
+          flash("Password saved. Welcome aboard.");
+        }}
+      />
+    );
   }
 
   return (
@@ -133,7 +185,10 @@ export default function AdminDashboard() {
       <div className="admin-bar">
         <div>
           <p className="admin-bar__who">
-            Signed in as <strong>{user.username}</strong>
+            Signed in as <strong>{user.full_name || user.email || user.username}</strong>{" "}
+            <span className={`tag ${isAdmin ? "tag--info" : "tag--success"}`}>
+              {isAdmin ? "Admin" : "Publisher"}
+            </span>
           </p>
           {user.last_login && (
             <p className="field__hint">Last sign in: {formatDateTime(user.last_login)}</p>
@@ -143,19 +198,34 @@ export default function AdminDashboard() {
           <button type="button" className="btn" onClick={() => setDialog({ type: "create" })}>
             New announcement
           </button>
+          {isAdmin && (
+            <button
+              type="button"
+              className="btn btn--ghost"
+              onClick={() => setDialog({ type: "publishers" })}
+            >
+              Publishers
+            </button>
+          )}
           <button
             type="button"
             className="btn btn--ghost"
-            onClick={() => {
-              signOut();
-              setUser(null);
-              setAnnouncements([]);
-            }}
+            onClick={() => setDialog({ type: "password" })}
           >
+            Change password
+          </button>
+          <button type="button" className="btn btn--ghost" onClick={leave}>
             Sign out
           </button>
         </div>
       </div>
+
+      {!isAdmin && (
+        <p className="field__hint" style={{ marginBottom: "14px" }}>
+          You can post announcements and edit your own. Ask an admin to edit
+          someone else's or to delete anything.
+        </p>
+      )}
 
       {error && <p className="alert alert--error">{error}</p>}
       {notice && <p className="alert alert--success">{notice}</p>}
@@ -164,7 +234,7 @@ export default function AdminDashboard() {
         className="searchbar"
         onSubmit={(event) => {
           event.preventDefault();
-          void load(search);
+          void load({ search, category, year });
         }}
         role="search"
       >
@@ -176,16 +246,46 @@ export default function AdminDashboard() {
           placeholder="Search by title..."
           aria-label="Search announcements"
         />
+        <select
+          className="select"
+          value={category}
+          onChange={(event) => applyFilters({ category: event.target.value })}
+          aria-label="Filter by category"
+        >
+          <option value="">All categories</option>
+          {taxonomy.categories.map((item) => (
+            <option key={item.slug} value={item.slug}>
+              {item.name}
+            </option>
+          ))}
+        </select>
+        <select
+          className="select"
+          value={year}
+          onChange={(event) => applyFilters({ year: event.target.value })}
+          aria-label="Filter by year level"
+        >
+          <option value="">All year levels</option>
+          {taxonomy.year_levels
+            .filter((item) => item.slug !== "all")
+            .map((item) => (
+              <option key={item.slug} value={item.slug}>
+                {item.name}
+              </option>
+            ))}
+        </select>
         <button type="submit" className="btn btn--ghost">
           Search
         </button>
-        {search && (
+        {(search || category || year) && (
           <button
             type="button"
             className="btn btn--ghost"
             onClick={() => {
               setSearch("");
-              void load("");
+              setCategory("");
+              setYear("");
+              void load();
             }}
           >
             Clear
@@ -197,7 +297,7 @@ export default function AdminDashboard() {
         <p className="field__hint">Loading...</p>
       ) : announcements.length === 0 ? (
         <div className="empty">
-          <p>No announcements yet. Create your first one.</p>
+          <p>No announcements match. Create one, or clear the filters.</p>
         </div>
       ) : (
         <div className="table-scroll">
@@ -205,78 +305,106 @@ export default function AdminDashboard() {
             <thead>
               <tr>
                 <th>Title</th>
+                <th>Filed under</th>
                 <th>Status</th>
-                <th>Attachments</th>
+                <th>Posted by</th>
                 <th>Updated</th>
                 <th aria-label="Actions" />
               </tr>
             </thead>
             <tbody>
-              {announcements.map((announcement) => (
-                <tr key={announcement.id}>
-                  <td>
-                    <a
-                      className="admin-table__title"
-                      href={`/a/${announcement.slug}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      {announcement.title}
-                    </a>
-                    <span className="field__hint">/a/{announcement.slug}</span>
-                  </td>
-                  <td data-label="Status">
-                    <button
-                      type="button"
-                      className={`tag ${announcement.published ? "" : "tag--draft"}`}
-                      onClick={() => togglePublished(announcement)}
-                      title="Click to toggle"
-                    >
-                      {announcement.published ? "Published" : "Draft"}
-                    </button>
-                  </td>
-                  <td className="admin-table__nowrap" data-label="Attachments">
-                    {announcement.image_count} photo
-                    {announcement.image_count === 1 ? "" : "s"}, {announcement.file_count} file
-                    {announcement.file_count === 1 ? "" : "s"}
-                  </td>
-                  <td className="admin-table__nowrap" data-label="Updated">
-                    {formatDateTime(announcement.updated_at)}
-                  </td>
-                  <td>
-                    <div className="admin-table__actions">
-                      <button
-                        type="button"
-                        className="btn btn--sm btn--ghost"
-                        onClick={() => setDialog({ type: "edit", announcement })}
+              {announcements.map((announcement) => {
+                const mine = announcement.author === user.id;
+                const editable = canEdit(announcement);
+                return (
+                  <tr key={announcement.id}>
+                    <td>
+                      <a
+                        className="admin-table__title"
+                        href={`/a/${announcement.slug}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
                       >
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn--sm btn--ghost"
-                        onClick={() => setDialog({ type: "attachments", announcement })}
-                      >
-                        Files
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn--sm btn--ghost"
-                        onClick={() => setDialog({ type: "share", announcement })}
-                      >
-                        Share
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn--sm btn--danger"
-                        onClick={() => setDialog({ type: "delete", announcement })}
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                        {announcement.title}
+                      </a>
+                      <span className="field__hint">
+                        {announcement.image_count} photo
+                        {announcement.image_count === 1 ? "" : "s"},{" "}
+                        {announcement.file_count} file
+                        {announcement.file_count === 1 ? "" : "s"}
+                      </span>
+                    </td>
+                    <td data-label="Filed under">
+                      <span className={`tag tag--${toneFor(taxonomy, announcement.category)}`}>
+                        {announcement.category_name}
+                      </span>
+                      {announcement.year_level !== "all" && (
+                        <span className="tag">{announcement.year_level_name}</span>
+                      )}
+                    </td>
+                    <td data-label="Status">
+                      {editable ? (
+                        <button
+                          type="button"
+                          className={`tag ${announcement.published ? "" : "tag--draft"}`}
+                          onClick={() => togglePublished(announcement)}
+                          title="Click to toggle"
+                        >
+                          {announcement.published ? "Published" : "Draft"}
+                        </button>
+                      ) : (
+                        <span className={`tag ${announcement.published ? "" : "tag--draft"}`}>
+                          {announcement.published ? "Published" : "Draft"}
+                        </span>
+                      )}
+                    </td>
+                    <td className="admin-table__nowrap" data-label="Posted by">
+                      {mine ? "You" : announcement.author_name || "-"}
+                    </td>
+                    <td className="admin-table__nowrap" data-label="Updated">
+                      {formatDateTime(announcement.updated_at)}
+                    </td>
+                    <td>
+                      <div className="admin-table__actions">
+                        {editable && (
+                          <>
+                            <button
+                              type="button"
+                              className="btn btn--sm btn--ghost"
+                              onClick={() => setDialog({ type: "edit", announcement })}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn--sm btn--ghost"
+                              onClick={() => setDialog({ type: "attachments", announcement })}
+                            >
+                              Files
+                            </button>
+                          </>
+                        )}
+                        <button
+                          type="button"
+                          className="btn btn--sm btn--ghost"
+                          onClick={() => setDialog({ type: "share", announcement })}
+                        >
+                          Share
+                        </button>
+                        {isAdmin && (
+                          <button
+                            type="button"
+                            className="btn btn--sm btn--danger"
+                            onClick={() => setDialog({ type: "delete", announcement })}
+                          >
+                            Delete
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -285,6 +413,7 @@ export default function AdminDashboard() {
       {(dialog.type === "create" || dialog.type === "edit") && (
         <AnnouncementModal
           announcement={dialog.type === "edit" ? dialog.announcement : null}
+          taxonomy={taxonomy}
           onClose={close}
           onSaved={(saved) => {
             upsert(saved);
@@ -314,8 +443,32 @@ export default function AdminDashboard() {
       {dialog.type === "share" && (
         <ShareModal announcement={dialog.announcement} onClose={close} />
       )}
+
+      {dialog.type === "publishers" && (
+        <PublishersModal currentUserId={user.id} onClose={close} />
+      )}
+
+      {dialog.type === "password" && (
+        <Modal title="Change your password" onClose={close} size="md" footer={null}>
+          <ChangePasswordForm
+            user={user}
+            forced={false}
+            onCancel={close}
+            onChanged={(updated) => {
+              setUser(updated);
+              close();
+              flash("Password changed.");
+            }}
+          />
+        </Modal>
+      )}
     </>
   );
+}
+
+/** The colour a category carries, straight from the API's own list. */
+function toneFor(taxonomy: Taxonomy, slug: string): string {
+  return taxonomy.categories.find((item) => item.slug === slug)?.tone ?? "neutral";
 }
 
 function ShareModal({

@@ -1,29 +1,54 @@
 ---
 import BaseLayout from "../layouts/BaseLayout.astro";
 import AnnouncementCard from "../components/AnnouncementCard.astro";
-import { listAnnouncements } from "../lib/api";
+import { getFeedState, getTaxonomy, listAnnouncements } from "../lib/api";
 import { LOGO_PATH, SITE_NAME, SITE_TAGLINE } from "../lib/config";
 
 const page = Math.max(1, Number(Astro.url.searchParams.get("page") ?? "1") || 1);
 const search = (Astro.url.searchParams.get("q") ?? "").trim();
+const category = (Astro.url.searchParams.get("category") ?? "").trim();
+const year = (Astro.url.searchParams.get("year") ?? "").trim();
 
-const data = await listAnnouncements(page, search);
-// Same shape as /api/feed-state/, so AutoRefresh can compare them.
-const newestUpdate = data.results.reduce(
-  (latest, item) => (item.updated_at > latest ? item.updated_at : latest),
-  ""
-);
-const refreshSignature = `${data.count}:${newestUpdate}`;
+const filters = { search, category, year };
+const [data, taxonomy, feedState] = await Promise.all([
+  listAnnouncements(page, filters),
+  getTaxonomy(),
+  getFeedState(filters),
+]);
+
+// Category slug -> tone, so a card badge and its filter chip always agree.
+const toneFor = (slug: string) =>
+  taxonomy.categories.find((item) => item.slug === slug)?.tone ?? "neutral";
+
+// Straight from /api/feed-state/, which is exactly what AutoRefresh polls -
+// with the same filters, so the two agree unless something really changed.
+// (Building this from the rendered rows would break on any search or on
+// page 2, where the newest edit may not be among the rows on screen.)
+const refreshSignature = `${feedState.count}:${feedState.last_modified ?? ""}`;
+const refreshParams = new URLSearchParams();
+if (search) refreshParams.set("q", search);
+if (category) refreshParams.set("category", category);
+if (year) refreshParams.set("year", year);
+const refreshQuery = refreshParams.toString();
 const hasPrev = Boolean(data.previous);
 const hasNext = Boolean(data.next);
 
-const pageHref = (target: number) => {
+/** Build a URL keeping the other filters intact, and always resetting to page 1. */
+const hrefWith = (changes: Record<string, string>, target = 1) => {
   const params = new URLSearchParams();
-  if (search) params.set("q", search);
+  const merged = { q: search, category, year, ...changes };
+  for (const [key, value] of Object.entries(merged)) {
+    if (value) params.set(key, value);
+  }
   if (target > 1) params.set("page", String(target));
   const query = params.toString();
   return query ? `/?${query}` : "/";
 };
+
+const pageHref = (target: number) => hrefWith({}, target);
+const activeCategory = taxonomy.categories.find((item) => item.slug === category);
+const activeYear = taxonomy.year_levels.find((item) => item.slug === year);
+const isFiltered = Boolean(search || category || year);
 ---
 
 <BaseLayout
@@ -31,6 +56,7 @@ const pageHref = (target: number) => {
   description={SITE_TAGLINE}
   canonicalPath="/"
   refreshSignature={refreshSignature}
+  refreshQuery={refreshQuery}
 >
   <div class="page-heading">
     <h1>Announcements</h1>
@@ -48,26 +74,89 @@ const pageHref = (target: number) => {
       placeholder="Search announcements..."
       aria-label="Search announcements"
     />
+    {category && <input type="hidden" name="category" value={category} />}
+    {year && <input type="hidden" name="year" value={year} />}
     <button class="btn" type="submit">Search</button>
-    {search && <a class="btn btn--ghost" href="/">Clear</a>}
+    {isFiltered && <a class="btn btn--ghost" href="/">Clear all</a>}
   </form>
+
+  {
+    taxonomy.categories.length > 0 && (
+      <div class="filters">
+        <nav class="filters__row" aria-label="Filter by category">
+          <span class="filters__label">Category</span>
+          <a class:list={["chip", !category && "chip--on"]} href={hrefWith({ category: "" })}>
+            All
+          </a>
+          {taxonomy.categories.map((item) => (
+            <a
+              class:list={["chip", `chip--${item.tone}`, category === item.slug && "chip--on"]}
+              href={hrefWith({ category: item.slug })}
+              aria-current={category === item.slug ? "true" : undefined}
+              title={item.description}
+            >
+              {item.short}
+            </a>
+          ))}
+        </nav>
+
+        <nav class="filters__row" aria-label="Filter by year level">
+          <span class="filters__label">Year level</span>
+          {taxonomy.year_levels.map((item) => {
+            const value = item.slug === "all" ? "" : item.slug;
+            const on = year === value;
+            return (
+              <a
+                class:list={["chip", on && "chip--on"]}
+                href={hrefWith({ year: value })}
+                aria-current={on ? "true" : undefined}
+              >
+                {item.short}
+              </a>
+            );
+          })}
+        </nav>
+      </div>
+    )
+  }
 
   {
     data.results.length === 0 ? (
       <div class="empty">
         <img src={LOGO_PATH} alt="" />
         <p>
-          {search
-            ? `No announcements match "${search}".`
+          {isFiltered
+            ? "No announcements match these filters yet."
             : "No announcements have been posted yet. Check back soon."}
         </p>
+        {isFiltered && (
+          <p>
+            <a class="btn btn--ghost" href="/">
+              Show all announcements
+            </a>
+          </p>
+        )}
       </div>
     ) : (
-      <ul class="card-list">
-        {data.results.map((announcement) => (
-          <AnnouncementCard announcement={announcement} />
-        ))}
-      </ul>
+      <>
+        {(activeCategory || activeYear) && (
+          <p class="filters__summary">
+            Showing {activeCategory ? activeCategory.name.toLowerCase() : "all"} announcements
+            {activeYear && activeYear.slug !== "all"
+              ? ` for ${activeYear.name}, plus those for everyone`
+              : ""}
+            .
+          </p>
+        )}
+        <ul class="card-list">
+          {data.results.map((announcement) => (
+            <AnnouncementCard
+              announcement={announcement}
+              tone={toneFor(announcement.category)}
+            />
+          ))}
+        </ul>
+      </>
     )
   }
 
@@ -99,7 +188,7 @@ const pageHref = (target: number) => {
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
-    margin-bottom: 22px;
+    margin-bottom: 14px;
   }
 
   .searchbar .input {

@@ -81,3 +81,27 @@ def database_is_persistent_in_production(app_configs, **kwargs):
             id="announcements.E002",
         )
     ]
+
+
+@register()
+def email_configured_in_production(app_configs, **kwargs):
+    """Warn when publisher invites would be printed instead of sent.
+
+    Without EMAIL_HOST_USER / EMAIL_HOST_PASSWORD the console backend is used:
+    inviting a publisher appears to work, but the temporary password goes to
+    the container's log rather than to their inbox, so they can never sign in.
+    """
+    if settings.DEBUG or settings.EMAIL_ENABLED or _is_non_serving_command():
+        return []
+    return [
+        Warning(
+            "Email is not configured; publisher invites will not be delivered "
+            "and the temporary password will be written to the deploy log.",
+            hint=(
+                "Set EMAIL_HOST_USER to the Gmail address and "
+                "EMAIL_HOST_PASSWORD to a Google App Password "
+                "(myaccount.google.com/apppasswords)."
+            ),
+            id="announcements.W003",
+        )
+    ]

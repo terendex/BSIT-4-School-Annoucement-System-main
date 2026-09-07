@@ -733,3 +733,220 @@ h3 {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ========================================================================
+   Filing: category + year level
+   The same six tones are used by the filter chips on the feed, the badges on
+   a card, and the status tags in the dashboard, so one colour always means
+   one thing.
+   ======================================================================== */
+:root {
+  --tone-danger-bg: #fdecea;
+  --tone-danger-line: #f3c3bf;
+  --tone-danger-ink: #8f1d17;
+
+  --tone-success-bg: #e6f4ec;
+  --tone-success-line: #b6ddc6;
+  --tone-success-ink: #145c37;
+
+  --tone-info-bg: #e8eefc;
+  --tone-info-line: #bcccf3;
+  --tone-info-ink: #1f3d8f;
+
+  --tone-warning-bg: #fdf1dc;
+  --tone-warning-line: #ecd3a0;
+  --tone-warning-ink: #7a5406;
+
+  --tone-accent-bg: #f1e9fb;
+  --tone-accent-line: #d5c2ee;
+  --tone-accent-ink: #56308c;
+
+  --tone-neutral-bg: var(--navy-50);
+  --tone-neutral-line: var(--navy-100);
+  --tone-neutral-ink: var(--navy-700);
+}
+
+.tag--danger,
+.tag--success,
+.tag--info,
+.tag--warning,
+.tag--accent,
+.tag--neutral {
+  background: var(--tone-bg);
+  border-color: var(--tone-line);
+  color: var(--tone-ink);
+}
+
+.tag--danger { --tone-bg: var(--tone-danger-bg); --tone-line: var(--tone-danger-line); --tone-ink: var(--tone-danger-ink); }
+.tag--success { --tone-bg: var(--tone-success-bg); --tone-line: var(--tone-success-line); --tone-ink: var(--tone-success-ink); }
+.tag--info { --tone-bg: var(--tone-info-bg); --tone-line: var(--tone-info-line); --tone-ink: var(--tone-info-ink); }
+.tag--warning { --tone-bg: var(--tone-warning-bg); --tone-line: var(--tone-warning-line); --tone-ink: var(--tone-warning-ink); }
+.tag--accent { --tone-bg: var(--tone-accent-bg); --tone-line: var(--tone-accent-line); --tone-ink: var(--tone-accent-ink); }
+.tag--neutral { --tone-bg: var(--tone-neutral-bg); --tone-line: var(--tone-neutral-line); --tone-ink: var(--tone-neutral-ink); }
+
+/* ------------------------------------------------------------ filter bar */
+.filters {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.filters__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+}
+
+.filters__label {
+  font-size: 0.72rem;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: var(--muted);
+  min-width: 74px;
+}
+
+.filters__summary {
+  font-size: 0.86rem;
+  color: var(--muted);
+  margin: 0 0 14px;
+}
+
+.chip {
+  display: inline-block;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--navy-700);
+  border-radius: 999px;
+  padding: 5px 13px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-decoration: none;
+  line-height: 1.35;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.chip:hover {
+  border-color: var(--navy-600);
+  text-decoration: none;
+}
+
+.chip--danger { border-color: var(--tone-danger-line); color: var(--tone-danger-ink); }
+.chip--success { border-color: var(--tone-success-line); color: var(--tone-success-ink); }
+.chip--info { border-color: var(--tone-info-line); color: var(--tone-info-ink); }
+.chip--warning { border-color: var(--tone-warning-line); color: var(--tone-warning-ink); }
+.chip--accent { border-color: var(--tone-accent-line); color: var(--tone-accent-ink); }
+
+/* The selected chip wins over any tone, so "which one is on" is never in doubt. */
+.chip--on,
+.chip--on:hover {
+  background: var(--navy-700);
+  border-color: var(--navy-700);
+  color: #fff;
+}
+
+/* Touch targets stay thumb-sized on phones. */
+@media (pointer: coarse) {
+  .chip {
+    padding: 9px 15px;
+    font-size: 0.86rem;
+  }
+}
+
+.card__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 7px;
+}
+
+/* ========================================================================
+   Sign in / password screens
+   ======================================================================== */
+.auth-card {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  padding: 22px;
+  max-width: 460px;
+  margin: 0 auto;
+}
+
+/* Inside a modal the panel already provides the frame. */
+.modal__body .auth-card {
+  border: none;
+  box-shadow: none;
+  padding: 0;
+  max-width: none;
+}
+
+.auth-card__actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.auth-card__note {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.alert--info {
+  background: var(--tone-info-bg);
+  border: 1px solid var(--tone-info-line);
+  color: var(--tone-info-ink);
+}
+
+.plain-list {
+  margin: 0;
+  padding-left: 18px;
+}
+
+/* -------------------------------------------------- password requirements */
+.rule-list {
+  list-style: none;
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  background: var(--navy-50);
+  border: 1px solid var(--navy-100);
+  border-radius: var(--radius-sm);
+  display: grid;
+  gap: 6px;
+}
+
+.rule-list__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.84rem;
+  color: var(--muted);
+}
+
+.rule-list__item--ok {
+  color: var(--success);
+  font-weight: 600;
+}
+
+.rule-list__icon {
+  display: inline-flex;
+  width: 16px;
+  justify-content: center;
+  flex: none;
+}
+
+/* Two fields side by side in the editor, stacking on narrow screens. */
+.field-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.field-row > .field {
+  flex: 1 1 220px;
+  min-width: 0;
+}

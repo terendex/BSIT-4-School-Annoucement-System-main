@@ -6,14 +6,21 @@ interface Props {
   initial: string;
   /** Announcement slug on a detail page; omit on list pages. */
   slug?: string;
+  /**
+   * The list page's active filters as a query string ("category=exam&year=4").
+   * feed-state has to be asked the same question the page was, or a filtered
+   * view would compare its own count against the whole board and reload for
+   * ever.
+   */
+  query?: string;
   /** Seconds between checks. */
   intervalSeconds?: number;
 }
 
-const endpointFor = (slug?: string) =>
+const endpointFor = (slug?: string, query?: string) =>
   slug
     ? `${API_BASE_URL}/api/announcements/${encodeURIComponent(slug)}/`
-    : `${API_BASE_URL}/api/feed-state/`;
+    : `${API_BASE_URL}/api/feed-state/${query ? `?${query}` : ""}`;
 
 const signatureOf = (data: any, slug?: string): string =>
   slug ? String(data?.updated_at ?? "") : `${data?.count ?? ""}:${data?.last_modified ?? ""}`;
@@ -29,12 +36,17 @@ const signatureOf = (data: any, slug?: string): string =>
  *  - on a long page, not while scrolled down mid-article
  * If the moment is wrong it simply waits and checks again.
  */
-export default function AutoRefresh({ initial, slug, intervalSeconds = 60 }: Props) {
+export default function AutoRefresh({
+  initial,
+  slug,
+  query,
+  intervalSeconds = 60,
+}: Props) {
   const initialRef = useRef(initial);
 
   const changed = useCallback(async () => {
     try {
-      const response = await fetch(endpointFor(slug), {
+      const response = await fetch(endpointFor(slug, query), {
         headers: { Accept: "application/json" },
         cache: "no-store",
       });
@@ -47,7 +59,7 @@ export default function AutoRefresh({ initial, slug, intervalSeconds = 60 }: Pro
       // Offline, or the API is asleep. Stay quiet and try again next tick.
       return false;
     }
-  }, [slug]);
+  }, [slug, query]);
 
   useEffect(() => {
     let timer: number | undefined;

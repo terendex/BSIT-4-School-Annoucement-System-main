@@ -162,13 +162,57 @@ then use **Share** to copy the link for your Messenger group chat.
 
 **To stop:** press `Ctrl+C` in each terminal.
 
+### Who can do what
+
+Two roles. Both sign in at `/login` with their **email address**.
+
+| | Publisher | Admin |
+|---|---|---|
+| Post an announcement | yes | yes |
+| Edit their own post | yes | yes |
+| Edit someone else's | no | yes |
+| Delete a post | no | yes |
+| Add and remove publishers | no | yes |
+
+The admin account is the one created from `ADMIN_USERNAME` / `ADMIN_PASSWORD`.
+It can also still sign in with its username, in case no email was ever set on
+it. Everyone else is added by invitation.
+
+### Adding a publisher
+
+1. Sign in as the admin → **Publishers** → type their email → **Send invite**.
+2. They get an email with a **temporary password** that expires in 7 days
+   (`INVITE_EXPIRY_DAYS`).
+3. They sign in at `/login` with that password, and the site immediately asks
+   them to set their own. Until they do, they can do nothing else — the API
+   refuses every other request, not just the buttons.
+4. Password rules: at least 10 characters, with an uppercase letter, a
+   lowercase letter, a number and a symbol. Common passwords are rejected even
+   in disguise, so `Password123!` will not be accepted.
+
+Losing the email is not a problem: **Resend invite** issues a new temporary
+password and invalidates the old one. **Disable** stops an account signing in
+while keeping it; **Remove** deletes it. Either way, the announcements that
+person posted stay on the board.
+
+Email needs `EMAIL_HOST_USER` and `EMAIL_HOST_PASSWORD` set to a Gmail address
+and a Google **App Password** (from myaccount.google.com/apppasswords, with
+2-Step Verification on — a normal Gmail password is refused by the SMTP
+server). With them unset, invites are printed to the server console instead of
+being sent, which is what you want locally.
+
 ### Posting an announcement
 
-1. Go to <http://localhost:4321/admin> and sign in.
+1. Go to <http://localhost:4321/login> and sign in.
 2. **New announcement** → fill in:
    - **Title** — the bold line in the Messenger preview.
    - **Body** — Markdown (`**bold**`, `- bullets`, `[links](https://…)`). The
      first ~200 characters become the grey line in the preview.
+   - **Category** — Class suspension, Holiday, Exam schedule, Enrollment,
+     Event, or General. This is what readers filter by.
+   - **Year level** — a specific year, or All year levels. A post for "all"
+     stays visible whichever year a reader filters to, so a campus-wide class
+     suspension is never hidden from anyone.
    - **Re-posted from** — which page it came from (optional).
    - **Link to the original post** — the Facebook post URL (optional).
    - **Poster and attachments** — the poster image and any files. The first
@@ -323,6 +367,9 @@ failed migration stops the release instead of half-applying it.
 | `DJANGO_DEBUG` | `False` |
 | `DJANGO_SECURE_SSL_REDIRECT` | `True` |
 | `FRONTEND_ORIGIN` | `https://your-app.vercel.app` (no trailing slash) |
+| `EMAIL_HOST_USER` | the Gmail address invites are sent from |
+| `EMAIL_HOST_PASSWORD` | a Google **App Password**, not the account password |
+| `SITE_NAME` | shown as the sender name in invite emails |
 | `CLOUDINARY_CLOUD_NAME` / `CLOUDINARY_API_KEY` / `CLOUDINARY_API_SECRET` | from step A |
 | `ADMIN_USERNAME` / `ADMIN_EMAIL` / `ADMIN_PASSWORD` | your admin login |
 

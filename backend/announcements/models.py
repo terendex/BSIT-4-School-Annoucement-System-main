@@ -6,6 +6,14 @@ from django.utils import timezone
 from django.utils.text import slugify
 
 from .sources import SOURCE_PAGE_CHOICES, page_name
+from .taxonomy import (
+    CATEGORY_CHOICES,
+    DEFAULT_CATEGORY,
+    DEFAULT_YEAR_LEVEL,
+    YEAR_LEVEL_CHOICES,
+    category_name,
+    year_level_name,
+)
 
 SLUG_MAX_LENGTH = 80
 
@@ -76,12 +84,39 @@ class AnnouncementQuerySet(models.QuerySet):
     def with_attachments(self):
         return self.prefetch_related("attachments")
 
+    def in_category(self, slug):
+        return self.filter(category=slug) if slug else self
+
+    def for_year_level(self, slug):
+        """Posts for one year, plus the ones addressed to everybody.
+
+        A 3rd year student filtering to their year still needs to see a campus
+        wide class suspension, so "all" is always included.
+        """
+        if not slug or slug == DEFAULT_YEAR_LEVEL:
+            return self
+        return self.filter(year_level__in=[slug, DEFAULT_YEAR_LEVEL])
+
 
 class Announcement(models.Model):
     title = models.CharField(max_length=200)
     slug = models.SlugField(max_length=SLUG_MAX_LENGTH, unique=True, blank=True)
     body = models.TextField(blank=True, help_text="Markdown.")
     published = models.BooleanField(default=True, db_index=True)
+    category = models.CharField(
+        max_length=20,
+        choices=CATEGORY_CHOICES,
+        default=DEFAULT_CATEGORY,
+        db_index=True,
+    )
+    # "all" means the whole school; a specific year narrows it without ever
+    # hiding it from that year's filter.
+    year_level = models.CharField(
+        max_length=10,
+        choices=YEAR_LEVEL_CHOICES,
+        default=DEFAULT_YEAR_LEVEL,
+        db_index=True,
+    )
     author = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -128,6 +163,14 @@ class Announcement(models.Model):
         return page_name(self.source_page)
 
     @property
+    def category_name(self) -> str:
+        return category_name(self.category)
+
+    @property
+    def year_level_name(self) -> str:
+        return year_level_name(self.year_level)
+
+    @property
     def cover_image(self):
         """First image attachment; the OG preview image."""
         for attachment in self.attachments.all():
@@ -170,3 +213,77 @@ class Attachment(models.Model):
 
     def __str__(self):
         return "{} ({})".format(self.original_filename, self.kind)
+
+
+class Profile(models.Model):
+    """Who a signed-in account is: an admin, or an invited publisher.
+
+    Kept beside the stock User rather than swapping in a custom user model,
+    which cannot be done safely on a database that already has accounts and
+    announcements pointing at it.
+
+    Role maps onto the Django flags too, so `django-admin/` and any code using
+    is_superuser keeps agreeing with us: admins are superusers, publishers are
+    staff-but-not-superuser. The role field is the one the API reads.
+    """
+
+    class Role(models.TextChoices):
+        ADMIN = "admin", "Admin"
+        PUBLISHER = "publisher", "Publisher"
+
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="profile"
+    )
+    role = models.CharField(
+        max_length=20, choices=Role.choices, default=Role.PUBLISHER, db_index=True
+    )
+    full_name = models.CharField(max_length=150, blank=True)
+
+    # Set when an invite is issued and cleared the moment the publisher picks
+    # their own password. While true the API allows nothing but the change.
+    must_change_password = models.BooleanField(default=False)
+    # A temporary password is a credential sitting in an inbox; it should not
+    # work forever if the invite is never opened.
+    temp_password_expires_at = models.DateTimeField(null=True, blank=True)
+
+    invited_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="invites_sent",
+    )
+    invited_at = models.DateTimeField(null=True, blank=True)
+    password_changed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["user__email", "user__username"]
+
+    def __str__(self):
+        return "{} ({})".format(self.user.email or self.user.username, self.role)
+
+    @property
+    def is_admin(self) -> bool:
+        return self.role == self.Role.ADMIN
+
+    @property
+    def temp_password_expired(self) -> bool:
+        if not self.must_change_password or self.temp_password_expires_at is None:
+            return False
+        return timezone.now() >= self.temp_password_expires_at
+
+
+def profile_for(user) -> "Profile":
+    """The user's profile, created on demand.
+
+    Accounts made before roles existed - the bootstrap admin, most of all -
+    have no profile row. Those are admins: the only way to have had an account
+    at all was to be the one running the site.
+    """
+    profile, created = Profile.objects.get_or_create(
+        user=user,
+        defaults={
+            "role": Profile.Role.ADMIN if user.is_superuser else Profile.Role.PUBLISHER
+        },
+    )
+    return profile

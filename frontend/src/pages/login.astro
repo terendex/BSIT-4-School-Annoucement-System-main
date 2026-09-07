@@ -1,0 +1,26 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import LoginForm from "../components/admin/LoginForm.tsx";
+---
+
+<BaseLayout
+  title="Log in"
+  description="Sign in to post announcements."
+  canonicalPath="/login"
+  noindex={true}
+>
+  <div class="page-heading">
+    <h1>Log in</h1>
+  </div>
+
+  <!-- client:only - the whole form is client-driven (JWT in memory), so there
+       is nothing useful to server-render and no session on the server. -->
+  <LoginForm client:only="react" />
+
+  <noscript>
+    <p class="alert alert--error">
+      Signing in needs JavaScript. Classmates can still read every announcement
+      without it.
+    </p>
+  </noscript>
+</BaseLayout>

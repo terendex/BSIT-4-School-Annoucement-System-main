@@ -4,13 +4,13 @@ import AdminDashboard from "../../components/admin/AdminDashboard.tsx";
 ---
 
 <BaseLayout
-  title="Admin dashboard"
-  description="Manage class announcements."
+  title="Dashboard"
+  description="Post and manage class announcements."
   canonicalPath="/admin"
   noindex={true}
 >
   <div class="page-heading">
-    <h1>Admin dashboard</h1>
+    <h1>Dashboard</h1>
   </div>
 
   <!--
@@ -21,7 +21,7 @@ import AdminDashboard from "../../components/admin/AdminDashboard.tsx";
 
   <noscript>
     <p class="alert alert--error">
-      The admin dashboard needs JavaScript. Classmates can still read every
+      The dashboard needs JavaScript. Classmates can still read every
       announcement without it.
     </p>
   </noscript>
@@ -156,6 +156,14 @@ import AdminDashboard from "../../components/admin/AdminDashboard.tsx";
 
   .searchbar .input {
     max-width: 340px;
+  }
+
+  /* .select inherits width:100% from the shared field styles, which would put
+     each dropdown on a row of its own inside this flex bar. */
+  .searchbar .select {
+    width: auto;
+    min-width: 170px;
+    flex: 0 1 auto;
   }
 
   /* -------------------------------------------------------- admin table */
@@ -395,6 +403,11 @@ import AdminDashboard from "../../components/admin/AdminDashboard.tsx";
     .searchbar .input {
       max-width: none;
       flex: 1 1 100%;
+    }
+
+    .searchbar .select {
+      flex: 1 1 45%;
+      min-width: 0;
     }
   }
 

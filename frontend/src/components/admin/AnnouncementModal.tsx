@@ -8,7 +8,7 @@ import {
   uploadAttachment,
 } from "../../lib/adminClient";
 import type { SourcePage } from "../../lib/adminClient";
-import type { Announcement } from "../../lib/types";
+import type { Announcement, Taxonomy } from "../../lib/types";
 
 /** The post saved but an attachment did not - a different story to a failed save. */
 class PartialSaveError extends Error {
@@ -24,16 +24,25 @@ class PartialSaveError extends Error {
 interface Props {
   /** Omit to create a new announcement. */
   announcement?: Announcement | null;
+  /** Categories and year levels, fetched once by the dashboard. */
+  taxonomy: Taxonomy;
   onClose: () => void;
   onSaved: (saved: Announcement) => void;
 }
 
-export default function AnnouncementModal({ announcement, onClose, onSaved }: Props) {
+export default function AnnouncementModal({
+  announcement,
+  taxonomy,
+  onClose,
+  onSaved,
+}: Props) {
   const isEdit = Boolean(announcement);
   const [title, setTitle] = useState(announcement?.title ?? "");
   const [body, setBody] = useState(announcement?.body ?? "");
   const [slug, setSlug] = useState(announcement?.slug ?? "");
   const [published, setPublished] = useState(announcement?.published ?? true);
+  const [category, setCategory] = useState(announcement?.category ?? "general");
+  const [yearLevel, setYearLevel] = useState(announcement?.year_level ?? "all");
   const [sourcePage, setSourcePage] = useState(announcement?.source_page ?? "");
   const [sourceUrl, setSourceUrl] = useState(announcement?.source_url ?? "");
   const [pages, setPages] = useState<SourcePage[]>([]);
@@ -59,6 +68,8 @@ export default function AnnouncementModal({ announcement, onClose, onSaved }: Pr
             title,
             body,
             published,
+            category,
+            year_level: yearLevel,
             source_page: sourcePage,
             source_url: sourceUrl,
             // Only send the slug when it actually changed; the link should stay put.
@@ -68,6 +79,8 @@ export default function AnnouncementModal({ announcement, onClose, onSaved }: Pr
             title,
             body,
             published,
+            category,
+            year_level: yearLevel,
             source_page: sourcePage,
             source_url: sourceUrl,
             ...(slug ? { slug } : {}),
@@ -173,6 +186,52 @@ export default function AnnouncementModal({ announcement, onClose, onSaved }: Pr
           </span>
           {fieldError("slug") && <span className="field__error">{fieldError("slug")}</span>}
         </label>
+
+        <div className="field-row">
+          <div className="field">
+            <span className="field__label">Category</span>
+            <select
+              className="select"
+              value={category}
+              onChange={(event) => setCategory(event.target.value)}
+            >
+              {taxonomy.categories.map((item) => (
+                <option key={item.slug} value={item.slug}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+            <span className="field__hint">
+              {taxonomy.categories.find((item) => item.slug === category)?.description ??
+                "What this announcement is about."}
+            </span>
+            {fieldError("category") && (
+              <span className="field__error">{fieldError("category")}</span>
+            )}
+          </div>
+
+          <div className="field">
+            <span className="field__label">Year level</span>
+            <select
+              className="select"
+              value={yearLevel}
+              onChange={(event) => setYearLevel(event.target.value)}
+            >
+              {taxonomy.year_levels.map((item) => (
+                <option key={item.slug} value={item.slug}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+            <span className="field__hint">
+              Posts for all year levels stay visible no matter which year a reader
+              filters to.
+            </span>
+            {fieldError("year_level") && (
+              <span className="field__error">{fieldError("year_level")}</span>
+            )}
+          </div>
+        </div>
 
         <label className="field">
           <span className="field__label">Body (Markdown)</span>
