@@ -2,11 +2,10 @@
 import AutoRefresh from "../components/AutoRefresh.tsx";
 import Header from "../components/Header.astro";
 import Footer from "../components/Footer.astro";
+import { OG_HEIGHT, OG_WIDTH, ogImageFor } from "../lib/ogImage";
 import {
   FB_APP_ID,
-  LOGO_HEIGHT,
-  LOGO_PATH,
-  LOGO_WIDTH,
+  OG_FALLBACK_PATH,
   SITE_NAME,
   SITE_TAGLINE,
   absoluteUrl,
@@ -54,15 +53,24 @@ const {
 
 const pageTitle = title === SITE_NAME ? title : `${title} | ${SITE_NAME}`;
 const canonical = absoluteUrl(canonicalPath);
-// First image of the announcement, or the seal - Messenger always gets a picture.
-const ogImage = image ? absoluteUrl(image) : absoluteUrl(LOGO_PATH);
+// The announcement's first photo, padded to the card's shape so nothing is
+// cropped; otherwise the seal on a ready-made 1200x630 canvas. Either way
+// Messenger gets a picture it will not slice.
+const preview = image
+  ? ogImageFor(absoluteUrl(image), imageWidth ?? null, imageHeight ?? null, imageType ?? null)
+  : {
+      url: absoluteUrl(OG_FALLBACK_PATH),
+      width: OG_WIDTH,
+      height: OG_HEIGHT,
+      type: "image/png",
+    };
+const ogImage = preview.url;
 const ogImageAlt = imageAlt || `${SITE_NAME} logo`;
-// Facebook only renders the big preview card when it knows the image is large
-// enough (and it trusts these tags rather than downloading first). The seal
-// placeholder is 1200x1200.
-const ogImageWidth = image ? imageWidth ?? null : LOGO_WIDTH;
-const ogImageHeight = image ? imageHeight ?? null : LOGO_HEIGHT;
-const ogImageType = image ? imageType ?? null : "image/png";
+// Facebook trusts these tags rather than downloading first, so they decide
+// whether it draws the large card or a small thumbnail.
+const ogImageWidth = preview.width;
+const ogImageHeight = preview.height;
+const ogImageType = preview.type;
 // Keep the OG description inside Messenger's preview budget.
 const ogDescription = description.length > 200 ? `${description.slice(0, 197)}...` : description;
 ---

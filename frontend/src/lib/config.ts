@@ -47,9 +47,15 @@ export const SITE_TAGLINE =
 
 /** Logo lives in /public and doubles as the Open Graph fallback image. */
 export const LOGO_PATH = "/logo.png";
-/** Keep in step with public/logo.png - sent as og:image:width/height. */
+/** Keep in step with public/logo.png. */
 export const LOGO_WIDTH = 800;
 export const LOGO_HEIGHT = 800;
+
+/**
+ * Link-preview image for announcements with no photo. Shaped 1200x630 so
+ * Facebook does not crop the seal - see scripts/build_logo.py.
+ */
+export const OG_FALLBACK_PATH = "/og-default.png";
 
 export const absoluteUrl = (path: string) =>
   path.startsWith("http") ? path : `${SITE_URL}${path.startsWith("/") ? path : `/${path}`}`;

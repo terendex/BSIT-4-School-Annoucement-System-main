@@ -43,6 +43,7 @@ def main():
     print(f"wrote {OUT} ({SIZE}x{SIZE}, {OUT.stat().st_size / 1024:.0f} KB)")
 
     build_favicons(clean)
+    build_og_fallback(clean)
 
 
 def build_favicons(seal):
@@ -75,6 +76,24 @@ def build_favicons(seal):
     for path in (ico, png32, png180):
         print(f"wrote {path.name} ({path.stat().st_size / 1024:.1f} KB)")
 
+
+
+def build_og_fallback(seal):
+    """Write the link-preview image used when an announcement has no photo.
+
+    Facebook and Messenger crop to about 1.91:1, so the square seal would lose
+    its top and bottom. This centres it on a 1200x630 canvas instead, which is
+    the shape they expect.
+    """
+    W, H = 1200, 630
+    canvas = Image.new("RGB", (W, H), WHITE)
+    badge = seal.copy()
+    badge.thumbnail((int(H * 0.82), int(H * 0.82)), Image.LANCZOS)
+    canvas.paste(badge, ((W - badge.width) // 2, (H - badge.height) // 2))
+
+    out = ICON_DIR / "og-default.png"
+    canvas.quantize(colors=64, method=Image.MEDIANCUT).save(out, "PNG", optimize=True)
+    print(f"wrote {out.name} ({W}x{H}, {out.stat().st_size / 1024:.0f} KB)")
 
 if __name__ == "__main__":
     main()
