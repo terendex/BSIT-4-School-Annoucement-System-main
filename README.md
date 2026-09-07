@@ -27,51 +27,134 @@ image — falling back to the school seal when there is no photo.
 
 ---
 
-## Local setup
+## Running the system
 
-**Requirements:** Python 3.12+, Node 20+.
+The system is **two programs that run at the same time**: the Django API and the
+Astro site. Each needs its own terminal window, and both must be running — the
+site fetches everything from the API, so with the API stopped the pages load but
+stay empty.
 
-### 1. Backend
+```
+Terminal 1  →  backend    Django API   http://127.0.0.1:8000
+Terminal 2  →  frontend   the website  http://localhost:4321
+```
+
+**Requirements:** Python 3.12+ and Node 20+. Check with `python --version` and
+`node --version`. On Windows, if `python` opens the Microsoft Store, use `py -3.12`
+instead of `python` in the commands below.
+
+### First time only — set up
+
+Run these once. Skip to [Every time](#every-time--start-the-system) afterwards.
+
+**1. Backend**
+
+```powershell
+cd backend
+python -m venv .venv
+.venv\Scripts\Activate.ps1        # PowerShell
+pip install -r requirements.txt
+copy .env.example .env
+```
+
+<details>
+<summary>Git Bash / macOS / Linux</summary>
 
 ```bash
 cd backend
 python -m venv .venv
-source .venv/Scripts/activate      # Windows Git Bash
-# .venv\Scripts\activate           # Windows PowerShell
-# source .venv/bin/activate        # macOS / Linux
-
+source .venv/Scripts/activate     # Git Bash;  .venv/bin/activate on macOS/Linux
 pip install -r requirements.txt
 cp .env.example .env
 ```
+</details>
 
-Edit `.env` and set at least `ADMIN_PASSWORD` (10+ characters). Leave
-`DATABASE_URL` and the Cloudinary keys blank locally — the app falls back to
-SQLite and to storing uploads under `backend/media/`.
+Open `backend/.env` and set `ADMIN_PASSWORD` to the password you want for your
+admin login (10+ characters). Leave `DATABASE_URL` and the Cloudinary keys blank
+— locally the app uses a SQLite file and saves uploads to `backend/media/`, so
+there is nothing else to install.
 
-```bash
-python manage.py migrate
-python manage.py ensure_admin      # creates the admin from the ADMIN_* vars
-python manage.py runserver         # http://127.0.0.1:8000
+```powershell
+python manage.py migrate          # creates the database tables
+python manage.py ensure_admin     # creates your admin account from .env
 ```
 
-### 2. Frontend
+**2. Frontend** — in a second terminal:
 
-```bash
+```powershell
 cd frontend
 npm install
-cp .env.example .env
-npm run dev                        # http://localhost:4321
+copy .env.example .env            # cp .env.example .env  on Git Bash/macOS
 ```
 
-Open <http://localhost:4321>, then sign in at <http://localhost:4321/admin>.
+The default `frontend/.env` already points at `http://127.0.0.1:8000`, so it
+works as-is for local use.
 
-### 3. Replace the logo
+**3. Replace the logo**
 
 `frontend/public/logo.png` is a **generated placeholder**. Save the real Saint
 Louis College seal over it, keeping the filename — it is used in the header, on
 empty states, and as the Open Graph fallback image. Square, at least 600×600.
 (The placeholder can be regenerated with
 `python frontend/scripts/generate_placeholder_logo.py`.)
+
+### Every time — start the system
+
+**Terminal 1 — the API:**
+
+```powershell
+cd backend
+.venv\Scripts\Activate.ps1        # source .venv/Scripts/activate  on Git Bash
+python manage.py runserver
+```
+
+Leave it running. It prints `Starting development server at http://127.0.0.1:8000/`.
+
+**Terminal 2 — the website:**
+
+```powershell
+cd frontend
+npm run dev
+```
+
+Leave it running too. Then open:
+
+| | |
+|---|---|
+| **The board** | <http://localhost:4321> |
+| **Admin dashboard** | <http://localhost:4321/admin> |
+| **Django admin** (optional, rarely needed) | <http://127.0.0.1:8000/django-admin/> |
+
+Sign in at `/admin` with the `ADMIN_USERNAME` and `ADMIN_PASSWORD` you put in
+`backend/.env`. Click **New announcement**, write it, attach photos and files,
+then use **Share** to copy the link for your Messenger group chat.
+
+**To stop:** press `Ctrl+C` in each terminal.
+
+### Posting your first announcement
+
+1. Go to <http://localhost:4321/admin> and sign in.
+2. **New announcement** → title and body (Markdown: `**bold**`, `- bullets`,
+   `[links](https://…)`) → keep **Published** ticked → **Create announcement**.
+3. **Files** on that row → upload photos and attachments. The first photo becomes
+   the Messenger preview image.
+4. **Share** → **Copy link** → paste into Messenger.
+
+While testing locally the link will be a `localhost` URL, which only works on
+your own computer. Real shareable links start working once it is deployed.
+
+### If something goes wrong
+
+| Symptom | Cause and fix |
+|---|---|
+| "No announcements have been posted yet" | Normal on a fresh install — go post one. If you *have* posted some, the API terminal has stopped or crashed: check Terminal 1, and confirm <http://127.0.0.1:8000/healthz/> returns `{"status": "ok"}`. |
+| `Could not load announcements` on `/admin` | The backend is not reachable. Start Terminal 1. |
+| `Port 8000 is already in use` | An old server is still running. Close it, or use `python manage.py runserver 8001` and set `PUBLIC_API_BASE_URL=http://127.0.0.1:8001` in `frontend/.env`. |
+| `Port 4321 is in use` | Astro offers the next free port; use the URL it prints. |
+| `Invalid username or password` and you are sure it is right | Re-run `python manage.py ensure_admin` — it resets the password to whatever is in `.env`. |
+| `Too many attempts. Wait a minute` | The login limiter (5 tries/minute). Wait 60 seconds. |
+| Signed out after restarting the browser | Expected — the session is deliberately dropped when the tab closes. Sign in again. |
+| `.venv\Scripts\Activate.ps1 cannot be loaded` | PowerShell script policy. Run `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once, or use `.venv\Scripts\activate.bat`. |
 
 ### Running the tests
 
