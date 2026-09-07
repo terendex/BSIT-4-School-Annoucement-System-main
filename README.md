@@ -301,8 +301,16 @@ matches the setting:
 | `backend` | [`backend/Dockerfile`](backend/Dockerfile) + [`backend/railway.json`](backend/railway.json) |
 
 Both produce the same image and both were built and run against Postgres before
-being committed. Either way `railway.json` supplies the healthcheck and the
-migration step, so there is nothing to configure by hand. Migrations and `ensure_admin` run as
+being committed. Either way `railway.json` supplies the start command, the
+healthcheck, and the migration step, so there is nothing to configure by hand.
+
+> **Leave the dashboard's Start Command empty.** For Dockerfile services Railway
+> runs a dashboard start command in exec form — no shell — so a bare
+> `--bind 0.0.0.0:$PORT` reaches gunicorn as the literal text `$PORT` and it
+> exits immediately with `'$PORT' is not a valid port number`. The container
+> then looks deployed while every healthcheck hits a dead process. The command
+> in `railway.json` is wrapped in `sh -c '...'` so the shell expands `$PORT`
+> either way; if you do set one by hand, wrap it the same way. Migrations and `ensure_admin` run as
 a **pre-deploy** step (after the build, before traffic switches over), so a
 failed migration stops the release instead of half-applying it.
 
