@@ -27,10 +27,23 @@ SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "insecure-dev-key-change-me")
 DEBUG = env_bool("DJANGO_DEBUG", False)
 ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1")
 
-# Render injects this automatically; add it so the service answers on its own host.
-RENDER_EXTERNAL_HOSTNAME = os.getenv("RENDER_EXTERNAL_HOSTNAME")
-if RENDER_EXTERNAL_HOSTNAME:
-    ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
+# The platform supplies the service's own hostname; add it so Django answers
+# there without DJANGO_ALLOWED_HOSTS having to be edited on every redeploy.
+# RAILWAY_PUBLIC_DOMAIN is set by Railway, RENDER_EXTERNAL_HOSTNAME by Render.
+PLATFORM_HOSTNAMES = [
+    host
+    for host in (
+        os.getenv("RAILWAY_PUBLIC_DOMAIN"),
+        os.getenv("RAILWAY_PRIVATE_DOMAIN"),
+        os.getenv("RENDER_EXTERNAL_HOSTNAME"),
+    )
+    if host
+]
+ALLOWED_HOSTS.extend(PLATFORM_HOSTNAMES)
+
+# Railway's internal healthcheck calls the service over its private network.
+if os.getenv("RAILWAY_ENVIRONMENT_NAME"):
+    ALLOWED_HOSTS.append(".railway.internal")
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -81,12 +94,16 @@ ASGI_APPLICATION = "config.asgi.application"
 # --------------------------------------------------------------------------
 DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
 if DATABASE_URL:
+    # Railway's private network (*.railway.internal) does not terminate TLS, so
+    # forcing sslmode=require there fails to connect. Public/managed hosts like
+    # Render do need it. Auto-detect, and allow an explicit override.
+    ssl_default = not DEBUG and ".railway.internal" not in DATABASE_URL
     DATABASES = {
         "default": dj_database_url.parse(
             DATABASE_URL,
             conn_max_age=600,
             conn_health_checks=True,
-            ssl_require=not DEBUG,
+            ssl_require=env_bool("DATABASE_SSL_REQUIRE", ssl_default),
         )
     }
 else:
@@ -221,14 +238,16 @@ if env_bool("ALLOW_VERCEL_PREVIEWS", False):
     CORS_ALLOWED_ORIGIN_REGEXES = [r"^https://[a-z0-9-]+\.vercel\.app$"]
 
 CSRF_TRUSTED_ORIGINS = [o for o in CORS_ALLOWED_ORIGINS if o.startswith("https://")]
-if RENDER_EXTERNAL_HOSTNAME:
-    CSRF_TRUSTED_ORIGINS.append("https://" + RENDER_EXTERNAL_HOSTNAME)
+CSRF_TRUSTED_ORIGINS.extend("https://" + host for host in PLATFORM_HOSTNAMES)
 
 # --------------------------------------------------------------------------
 # Security headers
 # --------------------------------------------------------------------------
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 SECURE_SSL_REDIRECT = env_bool("DJANGO_SECURE_SSL_REDIRECT", not DEBUG)
+# Platform healthchecks (Railway, Render) call the container over plain HTTP.
+# Without this they would receive a 301 to https and mark the deploy unhealthy.
+SECURE_REDIRECT_EXEMPT = [r"^healthz/?$"]
 if "test" in sys.argv:
     # The test client speaks plain HTTP; redirecting would 301 every request.
     SECURE_SSL_REDIRECT = False

@@ -1,3 +1,7 @@
+# ALTERNATIVE deployment target. The backend is deployed to Railway (see
+# backend/railway.json and the README); this blueprint is kept so Render
+# stays a one-click option. The same settings module supports both.
+#
 # Render blueprint: web service + managed Postgres.
 # Create the Cloudinary and admin secrets in the Render dashboard - they are
 # marked sync:false so they are never committed to git.

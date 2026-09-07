@@ -6,8 +6,8 @@ Facebook Messenger preview. Classmates just open the link — no account, no log
 
 ```
 frontend/   Astro 7 + React islands, SSR, deploys to Vercel
-backend/    Django 5 + DRF, deploys to Render
-            PostgreSQL (Render managed) + Cloudinary (media)
+backend/    Django 5 + DRF, deploys to Railway
+            PostgreSQL (Railway managed) + Cloudinary (media)
 ```
 
 ---
@@ -258,45 +258,70 @@ cd frontend && npx astro check           # TypeScript + Astro diagnostics
 
 ### A. Cloudinary (do this first)
 
-Render's free disk is ephemeral — anything uploaded there disappears on the next
-deploy — so media must live off-box.
+Container filesystems on Railway and Render are ephemeral — anything uploaded
+there disappears on the next deploy — so media must live off-box. (Railway can
+attach a persistent volume, but Cloudinary is already wired up here and serves
+images from a CDN, which keeps Messenger previews fast.)
 
 1. Create a free account at [cloudinary.com](https://cloudinary.com).
 2. From the dashboard, copy **Cloud name**, **API Key**, and **API Secret**.
 
-### B. Backend on Render
+### B. Backend on Railway
 
-**With the blueprint:** push this repo to GitHub, then in Render choose
-**New → Blueprint** and point it at the repo. `render.yaml` creates the web
-service and the Postgres database together.
+Railway runs the Django API and the Postgres database. The repo holds two apps
+side by side, so the service must be pointed at `backend/` — otherwise Railway
+looks at the repo root, finds no Python project, and the build fails.
 
-**Manually:** New → Web Service, connect the repo, then set
+**1. Add the database.** In your Railway project: **New → Database → Add
+PostgreSQL**. Nothing to configure.
+
+**2. Add the API service.** **New → GitHub Repo →** this repo. Then open the
+service's **Settings**:
 
 | Setting | Value |
 |---|---|
-| Root directory | `backend` |
-| Build command | `./build.sh` |
-| Start command | `gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --timeout 60` |
-| Health check path | `/healthz/` |
+| Root Directory | `backend` |
+| Networking → Public Networking | **Generate Domain** |
 
-Create a Postgres instance in Render and copy its **Internal Database URL**.
+Build and start commands, the healthcheck, and the migration step are read from
+[`backend/railway.json`](backend/railway.json), so you do not type them in.
+Migrations and `ensure_admin` run as a **pre-deploy** step — after the build,
+before traffic switches over — which means a failed migration stops the release
+instead of half-applying it.
 
-Environment variables:
+**3. Set the variables** on the API service (**Variables** tab):
 
 | Variable | Value |
 |---|---|
+| `DATABASE_URL` | `${{Postgres.DATABASE_URL}}` — type it exactly; Railway resolves the reference |
 | `DJANGO_SECRET_KEY` | a long random string |
 | `DJANGO_DEBUG` | `False` |
 | `DJANGO_SECURE_SSL_REDIRECT` | `True` |
-| `DATABASE_URL` | the Internal Database URL |
 | `FRONTEND_ORIGIN` | `https://your-app.vercel.app` (no trailing slash) |
 | `CLOUDINARY_CLOUD_NAME` / `CLOUDINARY_API_KEY` / `CLOUDINARY_API_SECRET` | from step A |
 | `ADMIN_USERNAME` / `ADMIN_EMAIL` / `ADMIN_PASSWORD` | your admin login |
-| `PYTHON_VERSION` | `3.12.6` |
 
-`build.sh` runs migrations and `ensure_admin` on every deploy. **After the first
-successful deploy, blank out `ADMIN_PASSWORD`** so it is not left sitting in the
-dashboard — the account persists, and the command becomes a no-op.
+You do **not** need to set `DJANGO_ALLOWED_HOSTS`, `PORT`, or `PYTHON_VERSION`.
+The settings module picks up `RAILWAY_PUBLIC_DOMAIN` for the allowed hosts and
+CSRF origins by itself, Railway injects `PORT`, and `backend/.python-version`
+pins Python 3.12.
+
+**After the first successful deploy, blank out `ADMIN_PASSWORD`** so it is not
+left sitting in the dashboard. The account persists and `ensure_admin` becomes a
+no-op on later deploys.
+
+Check it worked by opening `https://<your-railway-domain>/healthz/` — it should
+return `{"status": "ok"}`.
+
+<details>
+<summary>Deploying the backend to Render instead</summary>
+
+`render.yaml` is kept as an alternative blueprint: in Render choose **New →
+Blueprint** and point it at the repo, which creates the web service and Postgres
+together. Set the same variables as above (Render supplies `DATABASE_URL` from
+the blueprint), plus `PYTHON_VERSION=3.12.6`. The same settings module handles
+both platforms — it reads `RENDER_EXTERNAL_HOSTNAME` there instead.
+</details>
 
 ### C. Frontend on Vercel
 
@@ -305,14 +330,14 @@ detects Astro; the adapter handles the rest.
 
 | Variable | Value |
 |---|---|
-| `PUBLIC_API_BASE_URL` | `https://your-service.onrender.com` (no trailing slash) |
+| `PUBLIC_API_BASE_URL` | `https://your-service.up.railway.app` (no trailing slash) |
 | `PUBLIC_SITE_URL` | `https://your-app.vercel.app` (no trailing slash) |
 | `PUBLIC_SITE_NAME` | optional |
 | `PUBLIC_SITE_TAGLINE` | optional |
 
 ### D. Close the loop
 
-1. Set `FRONTEND_ORIGIN` on Render to the real Vercel domain and redeploy.
+1. Set `FRONTEND_ORIGIN` on Railway to the real Vercel domain and redeploy.
    CORS rejects every other origin, so this must match exactly.
 2. Set `PUBLIC_SITE_URL` on Vercel to the real domain — Open Graph URLs are
    built from it, and Messenger will not render a preview for a `localhost` URL.
@@ -320,9 +345,9 @@ detects Astro; the adapter handles the rest.
    [Facebook's Sharing Debugger](https://developers.facebook.com/tools/debug/)
    to prime the crawler cache.
 
-> **Free tier note:** Render spins the service down after inactivity, so the
-> first request after a quiet spell takes ~30 seconds. If a page loads empty,
-> that is usually a cold start — reload. Setting up an uptime pinger against
+> **Cold starts:** a small backend that has been idle can take a few seconds to
+> answer its first request. If a page loads empty, reload it. Railway keeps
+> services warm on a paid plan; on hosts that sleep, an uptime pinger against
 > `/healthz/` avoids it.
 
 ---
@@ -400,6 +425,7 @@ backend/
     exceptions.py      uniform { detail, errors } error envelope
     tests.py           22 tests
     management/commands/ensure_admin.py
+  railway.json         Railway build, pre-deploy migrations, start command
   build.sh             Render build: install, collectstatic, migrate, ensure_admin
 
 frontend/
