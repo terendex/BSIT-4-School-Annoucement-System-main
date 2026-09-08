@@ -72,6 +72,11 @@ import AdminDashboard from "../../components/admin/AdminDashboard.tsx";
     max-width: 820px;
   }
 
+  /* The poster maker needs room for the form and the preview side by side. */
+  .modal__panel--xl {
+    max-width: 1120px;
+  }
+
   .modal__header {
     display: flex;
     align-items: center;
@@ -322,6 +327,66 @@ import AdminDashboard from "../../components/admin/AdminDashboard.tsx";
     margin-bottom: 14px;
   }
 
+  /* ---------------------------------------------------------- poster maker */
+  .poster {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 420px);
+    gap: 24px;
+    align-items: start;
+  }
+
+  .poster__form .field:last-child {
+    margin-bottom: 0;
+  }
+
+  .poster__textarea {
+    min-height: 0;
+  }
+
+  /*
+    Lists and schedules stay monospaced - the columns and the indents that
+    drive the layout are only visible when the characters line up. A plain
+    paragraph is just a paragraph.
+  */
+  .poster__textarea--prose {
+    font-family: var(--font);
+    font-size: 0.95rem;
+    line-height: 1.5;
+  }
+
+  /* The preview follows the form down a long list of fields. */
+  .poster__preview {
+    position: sticky;
+    top: 0;
+  }
+
+  .poster__stage {
+    background: var(--navy-50);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    padding: 12px;
+    display: grid;
+    place-items: center;
+  }
+
+  /*
+    The canvas is drawn at 1200px wide whatever the preview is; letting CSS
+    scale it keeps the poster crisp on the screen and full size in the file.
+  */
+  .poster__canvas {
+    width: 100%;
+    height: auto;
+    max-height: 62vh;
+    object-fit: contain;
+    box-shadow: var(--shadow-sm);
+    background: var(--paper);
+  }
+
+  .poster__meta {
+    margin-top: 10px;
+    text-align: center;
+  }
+
   .attachment-list {
     list-style: none;
     margin: 0;
@@ -491,6 +556,22 @@ import AdminDashboard from "../../components/admin/AdminDashboard.tsx";
     .searchbar .select {
       flex: 1 1 45%;
       min-width: 0;
+    }
+  }
+
+  @media (max-width: 900px) {
+    .poster {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    /* Stacked, the preview leads so the words being typed are visible. */
+    .poster__preview {
+      position: static;
+      order: -1;
+    }
+
+    .poster__canvas {
+      max-height: 44vh;
     }
   }
 

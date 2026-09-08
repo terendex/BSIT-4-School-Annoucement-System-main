@@ -241,6 +241,41 @@ sent keeps working.
 While testing locally the link is a `localhost` URL that only works on your own
 computer. Real shareable links start working once it is deployed.
 
+### Making the poster image
+
+**Poster** on any row opens the poster maker. Pick the kind of notice, type the
+words, and it draws a 1200px PNG in the school's navy — nothing to drag, size
+or align. **Attach to announcement** puts it straight on the post (the first
+photo is the one Messenger shows); **Download PNG** saves it to send by hand.
+
+The templates are Notice, Meeting, Reminders, Class schedule, Exam schedule,
+Class suspension, Holiday, Enrollment, Event, Deadline and General
+announcement. The ones that suit the announcement's category are listed first,
+but any template can be used for any post.
+
+Two fields take a list rather than a sentence:
+
+- **Bullets** — one per line. Indent a line to nest it under the line above,
+  and again for a third level. Tabs, two spaces or four all work, as long as
+  you are consistent; pasted `-` and `•` characters are stripped.
+- **Entries** (schedules) — one class or exam per line, columns separated by
+  `|`:
+
+  ```
+  IT 123 - Systems Administration | Mon | 8:00 - 10:00 AM | B03
+  ```
+
+  Dashes, commas or runs of spaces work as separators too, and a line missing
+  its room will not shear the table. Start a line with `#` to name the columns
+  yourself.
+
+Nothing has to be sized by hand. A few subjects are set as cards, a dozen as a
+table, and a full week is grouped under a heading per day; longer than that and
+it goes back to one table, set in two columns where the entries are short
+enough. The poster grows taller as it fills up, and only once it has run out of
+room does the type shrink - the editor prints the final size under the preview,
+and says so when there is more text than fits on one poster.
+
 ### Re-posting from the SLC Facebook pages
 
 The pages in the **Re-posted from** dropdown are:
@@ -520,10 +555,14 @@ backend/
 frontend/
   src/
     lib/               api client, admin JWT client, markdown, formatting, config
+      poster/          the poster maker: theme, block vocabulary, layout
+                       engine (wrapping, fitting, page growth), the parsers
+                       for typed lists and schedules, and the templates
     layouts/           BaseLayout.astro — Open Graph and page chrome
     components/        cards, Gallery + ShareBar islands
       admin/           Modal, LoginModal, AnnouncementModal,
-                       AttachmentsModal, ConfirmModal, AdminDashboard
+                       AttachmentsModal, PosterModal, ConfirmModal,
+                       AdminDashboard
     pages/             index.astro, a/[slug].astro, admin/index.astro, 404.astro
   public/              logo.png (the seal), favicon.ico/-32/apple-touch, robots.txt
   brand/               slclogo.jpg - original scan, not deployed

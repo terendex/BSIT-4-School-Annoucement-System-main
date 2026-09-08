@@ -6,8 +6,8 @@ interface Props {
   onClose: () => void;
   children: ReactNode;
   footer?: ReactNode;
-  /** Wider shell for the announcement editor. */
-  size?: "sm" | "md" | "lg";
+  /** Wider shell for the announcement editor, widest for the poster maker. */
+  size?: "sm" | "md" | "lg" | "xl";
   /** Blocks Escape / backdrop dismissal while a request is in flight. */
   busy?: boolean;
 }

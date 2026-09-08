@@ -4,6 +4,7 @@ import AnnouncementModal from "./AnnouncementModal";
 import AttachmentsModal from "./AttachmentsModal";
 import ChangePasswordForm from "./ChangePasswordForm";
 import ConfirmModal from "./ConfirmModal";
+import PosterModal from "./PosterModal";
 import PublishersModal from "./PublishersModal";
 import {
   ApiError,
@@ -17,13 +18,14 @@ import {
 } from "../../lib/adminClient";
 import { SITE_URL } from "../../lib/config";
 import { formatCompact, formatDateTime } from "../../lib/format";
-import type { AdminUser, Announcement, Taxonomy } from "../../lib/types";
+import type { AdminUser, Announcement, Attachment, Taxonomy } from "../../lib/types";
 
 type Dialog =
   | { type: "none" }
   | { type: "create" }
   | { type: "edit"; announcement: Announcement }
   | { type: "attachments"; announcement: Announcement }
+  | { type: "poster"; announcement: Announcement }
   | { type: "delete"; announcement: Announcement }
   | { type: "share"; announcement: Announcement }
   | { type: "publishers" }
@@ -385,6 +387,13 @@ export default function AdminDashboard() {
                             >
                               Files
                             </button>
+                            <button
+                              type="button"
+                              className="btn btn--sm btn--ghost"
+                              onClick={() => setDialog({ type: "poster", announcement })}
+                            >
+                              Poster
+                            </button>
                           </>
                         )}
                         <button
@@ -434,6 +443,14 @@ export default function AdminDashboard() {
         />
       )}
 
+      {dialog.type === "poster" && (
+        <PosterModal
+          announcement={dialog.announcement}
+          onClose={close}
+          onAttached={(attachment) => upsert(withPoster(dialog.announcement, attachment))}
+        />
+      )}
+
       {dialog.type === "delete" && (
         <ConfirmModal
           title="Delete announcement"
@@ -467,6 +484,20 @@ export default function AdminDashboard() {
       )}
     </>
   );
+}
+
+/**
+ * The announcement as it stands once a poster has been attached to it - the
+ * counts the table shows, and the cover the link preview uses when it is the
+ * first photo.
+ */
+function withPoster(announcement: Announcement, attachment: Attachment): Announcement {
+  return {
+    ...announcement,
+    images: [...announcement.images, attachment],
+    image_count: announcement.image_count + 1,
+    cover_image: announcement.cover_image ?? attachment,
+  };
 }
 
 /** The colour a category carries, straight from the API's own list. */
