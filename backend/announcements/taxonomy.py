@@ -1,13 +1,18 @@
 """How announcements are filed: what kind of notice, and who it is for.
 
-Two independent axes, so a reader can ask for "3rd year exam schedules" without
-the two lists multiplying into a single unmanageable set of tags:
+Three independent axes, so a reader can ask for "3rd year exam schedules"
+without the lists multiplying into a single unmanageable set of tags:
 
   category   - what the announcement is about (suspension, holiday, exam, ...)
   year_level - which year it concerns, or ALL when it is for everybody
+  section    - which section within that year, or ALL for every section
 
-Both live here rather than on the model so the frontend can fetch the labels
-and colours from /api/taxonomy/ and never hardcode a copy that drifts.
+Year and section are separate because most notices are for a whole year, and
+the ones that are not are for one section of it - 4A is "4th year" plus
+"section A", not a fourteenth entry in a combined list.
+
+All three live here rather than on the model so the frontend can fetch the
+labels from /api/taxonomy/ and never hardcode a copy that drifts.
 """
 
 # Ordered as they should appear in the filter bar. The tone is a CSS modifier
@@ -70,6 +75,18 @@ YEAR_LEVELS = [
 
 DEFAULT_YEAR_LEVEL = "all"
 
+# Sections within a year. A post for "all" sections stays visible whichever
+# section a reader filters to, exactly as a post for "all" years does.
+SECTIONS = [
+    {"slug": "all", "name": "All sections", "short": "All sections"},
+    {"slug": "a", "name": "Section A", "short": "A"},
+    {"slug": "b", "name": "Section B", "short": "B"},
+    {"slug": "c", "name": "Section C", "short": "C"},
+    {"slug": "d", "name": "Section D", "short": "D"},
+]
+
+DEFAULT_SECTION = "all"
+
 CATEGORY_CHOICES = [(item["slug"], item["name"]) for item in CATEGORIES]
 CATEGORY_SLUGS = {item["slug"] for item in CATEGORIES}
 CATEGORY_BY_SLUG = {item["slug"]: item for item in CATEGORIES}
@@ -77,6 +94,10 @@ CATEGORY_BY_SLUG = {item["slug"]: item for item in CATEGORIES}
 YEAR_LEVEL_CHOICES = [(item["slug"], item["name"]) for item in YEAR_LEVELS]
 YEAR_LEVEL_SLUGS = {item["slug"] for item in YEAR_LEVELS}
 YEAR_LEVEL_BY_SLUG = {item["slug"]: item for item in YEAR_LEVELS}
+
+SECTION_CHOICES = [(item["slug"], item["name"]) for item in SECTIONS]
+SECTION_SLUGS = {item["slug"] for item in SECTIONS}
+SECTION_BY_SLUG = {item["slug"]: item for item in SECTIONS}
 
 
 def category_name(slug: str) -> str:
@@ -87,3 +108,29 @@ def category_name(slug: str) -> str:
 def year_level_name(slug: str) -> str:
     item = YEAR_LEVEL_BY_SLUG.get(slug)
     return item["name"] if item else ""
+
+
+def section_name(slug: str) -> str:
+    item = SECTION_BY_SLUG.get(slug)
+    return item["name"] if item else ""
+
+
+def audience_name(year_level: str, section: str) -> str:
+    """How the two together read on a card: "4th year - Section A", or "4A".
+
+    Returns an empty string when a post is for everybody, so a card can leave
+    the tag off entirely rather than showing "All year levels, all sections".
+    """
+    year = YEAR_LEVEL_BY_SLUG.get(year_level)
+    part = SECTION_BY_SLUG.get(section)
+    has_year = year is not None and year_level != DEFAULT_YEAR_LEVEL
+    has_section = part is not None and section != DEFAULT_SECTION
+
+    if has_year and has_section:
+        # "4th year" + "A" reads as 4A, which is what everyone calls it.
+        return f"{year['short']} {part['short']}".replace("th yr ", "").strip() or year["name"]
+    if has_year:
+        return year["name"]
+    if has_section:
+        return part["name"]
+    return ""

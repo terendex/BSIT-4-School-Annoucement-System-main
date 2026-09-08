@@ -22,10 +22,13 @@ export const OG_HEIGHT = 630;
  * c_pad  - scale to fit inside 1200x630 and pad the remainder, never cropping.
  * b_auto:predominant - fill the padding with the image's dominant colour, so
  *                      the bars read as part of the design rather than a border.
- * f_jpg  - force JPEG. Facebook handles it everywhere; f_auto could hand back
- *          AVIF/WebP, which its crawler has been inconsistent about.
+ *
+ * The delivery URL also ends in .jpg (see below), which is what converts the
+ * file - so there is no f_jpg here. JPEG rather than f_auto because f_auto can
+ * hand back AVIF or WebP, which Facebook's crawler has been inconsistent
+ * about.
  */
-const OG_TRANSFORM = `c_pad,w_${OG_WIDTH},h_${OG_HEIGHT},b_auto:predominant,f_jpg`;
+const OG_TRANSFORM = `c_pad,w_${OG_WIDTH},h_${OG_HEIGHT},b_auto:predominant`;
 
 const CLOUDINARY_UPLOAD = "/image/upload/";
 
@@ -57,9 +60,25 @@ export function ogImageFor(
   const head = url.slice(0, marker + CLOUDINARY_UPLOAD.length);
   const tail = url.slice(marker + CLOUDINARY_UPLOAD.length);
   return {
-    url: `${head}${OG_TRANSFORM}/${tail}`,
+    url: `${head}${OG_TRANSFORM}/${asJpeg(tail)}`,
     width: OG_WIDTH,
     height: OG_HEIGHT,
     type: "image/jpeg",
   };
+}
+
+/**
+ * Rewrites the file extension to .jpg, which is how Cloudinary is asked for a
+ * format.
+ *
+ * It also keeps the three things that describe the image agreeing with each
+ * other: the extension, the Content-Type Cloudinary returns, and the
+ * `og:image:type` tag. A URL ending in .png that serves JPEG bytes is served
+ * correctly but reads as a mismatch to anything that sniffs the extension
+ * rather than the response.
+ */
+function asJpeg(path: string): string {
+  const slash = path.lastIndexOf("/");
+  const dot = path.lastIndexOf(".");
+  return dot > slash ? `${path.slice(0, dot)}.jpg` : `${path}.jpg`;
 }

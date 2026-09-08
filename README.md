@@ -233,10 +233,12 @@ sent - fine locally, and the startup checks warn if it happens in production.
      The poster is uploaded first, so it becomes the Messenger preview image.
 3. Keep **Published** ticked → **Create announcement**. Everything, uploads
    included, is saved in that one dialog.
-4. **Share** on that row → **Copy link** → paste into your Messenger group chat.
+4. The **...** button on that row → **Share** → **Copy link** → paste it into
+   any Messenger chat. Edit, Photos and files, Make a poster and Delete are all
+   in that menu.
 
-To change something later, **Edit** for the text or **Files** for the
-attachments. Editing the title does *not* move the link, so anything you already
+To change something later, **Edit** for the text or **Photos and files** for
+the attachments. Editing the title does *not* move the link, so anything you already
 sent keeps working.
 
 While testing locally the link is a `localhost` URL that only works on your own
@@ -244,14 +246,32 @@ computer. Real shareable links start working once it is deployed.
 
 ### Making the poster image
 
-Two ways in: **Make a poster** in the New announcement dialog, or **Poster** on
-any row of the dashboard afterwards. Either way you pick the kind of notice,
-type the words, and it draws a 1200px PNG in the school's navy — nothing to
-drag, size or align.
+Two ways in: **Make a poster** in the New announcement dialog, or the **...**
+menu on any row of the dashboard afterwards. Either way you pick the kind of
+notice, type the words, and it draws a 1200x630 PNG in the school's navy —
+nothing to drag, size or align.
 
 From the new-post dialog, **Use this poster** hands it back and it is uploaded
 with the announcement. From a dashboard row, **Attach to announcement** puts it
 straight on the post. **Download PNG** saves it to send by hand instead.
+
+### When the link preview does not show
+
+The preview is the same in a direct message as in a group chat — both read the
+same tags off the same page — so a link that previews in one and not the other
+is almost always Facebook's cache rather than the page.
+
+Facebook reads a link **once** and remembers what it found, for that link,
+everywhere. If it first read this one before the poster was attached, or while
+the API was still waking up, it keeps serving that first reading until it is
+told to look again. Open **Share** and use the **Sharing Debugger** link inside
+it, press **Scrape Again**, then send the link.
+
+What the page already sends, and what the debugger will show: `og:title`,
+`og:description`, `og:url`, `og:image` with its `secure_url`, `type`, `width`
+and `height`, plus `twitter:card`. The image is 1200x630 JPEG — Facebook draws
+the large card from those numbers rather than downloading the file first, so
+they have to be right.
 
 The templates are Notice, Meeting, Reminders, Class schedule, Exam schedule,
 Class suspension, Holiday, Enrollment, Event, Deadline and General

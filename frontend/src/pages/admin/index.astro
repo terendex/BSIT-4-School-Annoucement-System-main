@@ -205,9 +205,9 @@ import AdminDashboard from "../../components/admin/AdminDashboard.tsx";
        Under auto layout every nowrap column took what it wanted and the
        title - the only wrappable one - was squeezed to a word per line. */
     table-layout: fixed;
-    /* The page is 960px wide with 20px padding either side, so anything over
-       920px guarantees a horizontal scrollbar at full width. */
-    min-width: 880px;
+    /* With the row actions behind one button the table fits the page, so
+       there is no sideways scrolling left to do at full width. */
+    min-width: 680px;
   }
 
   /* Pixel widths for the columns whose content is a known size, and `auto`
@@ -218,7 +218,7 @@ import AdminDashboard from "../../components/admin/AdminDashboard.tsx";
   .admin-table th:nth-child(2) { width: 150px; }  /* filed under */
   .admin-table th:nth-child(3) { width: 112px; }  /* status */
   .admin-table th:nth-child(4) { width: 125px; }  /* updated */
-  .admin-table th:nth-child(5) { width: 265px; }  /* Edit Files Share Delete */
+  .admin-table th:nth-child(5) { width: 64px; }   /* the actions menu button */
 
   /* Publishers: three buttons, and "Resend invite" is the long one. */
   .admin-table--compact th:nth-child(1) { width: auto; }   /* account */
@@ -300,6 +300,88 @@ import AdminDashboard from "../../components/admin/AdminDashboard.tsx";
   .admin-table__actions .btn {
     white-space: nowrap;
     padding: 6px 9px;
+  }
+
+  /* ------------------------------------------------- row actions menu */
+  .row-menu {
+    padding: 4px 10px;
+    font-size: 1.05rem;
+    line-height: 1.1;
+    letter-spacing: 0.06em;
+  }
+
+  /*
+    Fixed, not absolute: the table lives in a horizontal scroller, and a panel
+    positioned inside it would be clipped at the edge. The component measures
+    the button and places this against the viewport.
+  */
+  .row-menu__panel {
+    position: fixed;
+    z-index: 90;
+    min-width: 190px;
+    padding: 6px;
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-md);
+    display: flex;
+    flex-direction: column;
+    animation: modal-in 0.12s ease-out;
+  }
+
+  .row-menu__item {
+    appearance: none;
+    border: none;
+    background: transparent;
+    font: inherit;
+    font-size: 0.9rem;
+    text-align: left;
+    padding: 9px 12px;
+    border-radius: 7px;
+    color: var(--ink);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .row-menu__item:hover,
+  .row-menu__item:focus-visible {
+    background: var(--navy-50);
+    outline: none;
+  }
+
+  .row-menu__item--danger {
+    color: var(--danger);
+  }
+
+  .row-menu__item--danger:hover,
+  .row-menu__item--danger:focus-visible {
+    background: var(--danger-soft);
+  }
+
+  .row-menu__rule {
+    height: 1px;
+    background: var(--line);
+    margin: 5px 8px;
+  }
+
+  /* The "preview is missing" explainer in the Share dialog. */
+  .share-help {
+    margin-top: 16px;
+    border-top: 1px solid var(--line);
+    padding-top: 12px;
+  }
+
+  .share-help > summary {
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--navy-700);
+  }
+
+  .share-help p {
+    font-size: 0.85rem;
+    color: var(--muted);
+    margin: 10px 0 0;
   }
 
   /* A long unbroken title must wrap rather than widen the fixed column. */
@@ -686,17 +768,15 @@ import AdminDashboard from "../../components/admin/AdminDashboard.tsx";
       text-align: right;
     }
 
+    /* On a card the menu button sits on its own line, at the right. */
     .admin-table__actions {
-      justify-content: stretch;
+      justify-content: flex-end;
       margin-top: 10px;
-      gap: 8px;
-      /* The desktop rule is nowrap, which would crush four buttons into a
-         360px row. On a card they get two comfortable rows instead. */
-      flex-wrap: wrap;
     }
 
-    .admin-table__actions .btn {
-      flex: 1 1 calc(50% - 4px);
+    .row-menu {
+      /* Comfortably tappable, unlike the tight desktop button. */
+      padding: 8px 16px;
     }
 
     .admin-table__actions .btn {

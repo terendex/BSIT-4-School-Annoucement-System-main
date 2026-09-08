@@ -5,6 +5,7 @@ import AttachmentsModal from "./AttachmentsModal";
 import ChangePasswordForm from "./ChangePasswordForm";
 import ConfirmModal from "./ConfirmModal";
 import PosterModal from "./PosterModal";
+import RowMenu from "./RowMenu";
 import PublishersModal from "./PublishersModal";
 import {
   ApiError,
@@ -371,47 +372,44 @@ export default function AdminDashboard() {
                     </td>
                     <td>
                       <div className="admin-table__actions">
-                        {editable && (
-                          <>
-                            <button
-                              type="button"
-                              className="btn btn--sm btn--ghost"
-                              onClick={() => setDialog({ type: "edit", announcement })}
-                            >
-                              Edit
-                            </button>
-                            <button
-                              type="button"
-                              className="btn btn--sm btn--ghost"
-                              onClick={() => setDialog({ type: "attachments", announcement })}
-                            >
-                              Files
-                            </button>
-                            <button
-                              type="button"
-                              className="btn btn--sm btn--ghost"
-                              onClick={() => setDialog({ type: "poster", announcement })}
-                            >
-                              Poster
-                            </button>
-                          </>
-                        )}
-                        <button
-                          type="button"
-                          className="btn btn--sm btn--ghost"
-                          onClick={() => setDialog({ type: "share", announcement })}
-                        >
-                          Share
-                        </button>
-                        {isAdmin && (
-                          <button
-                            type="button"
-                            className="btn btn--sm btn--danger-quiet"
-                            onClick={() => setDialog({ type: "delete", announcement })}
-                          >
-                            Delete
-                          </button>
-                        )}
+                        <RowMenu
+                          label={announcement.title}
+                          actions={[
+                            ...(editable
+                              ? [
+                                  {
+                                    label: "Edit",
+                                    onSelect: () =>
+                                      setDialog({ type: "edit", announcement }),
+                                  },
+                                  {
+                                    label: "Photos and files",
+                                    onSelect: () =>
+                                      setDialog({ type: "attachments", announcement }),
+                                  },
+                                  {
+                                    label: "Make a poster",
+                                    onSelect: () =>
+                                      setDialog({ type: "poster", announcement }),
+                                  },
+                                ]
+                              : []),
+                            {
+                              label: "Share",
+                              onSelect: () => setDialog({ type: "share", announcement }),
+                            },
+                            ...(isAdmin
+                              ? [
+                                  {
+                                    label: "Delete",
+                                    danger: true,
+                                    onSelect: () =>
+                                      setDialog({ type: "delete", announcement }),
+                                  },
+                                ]
+                              : []),
+                          ]}
+                        />
                       </div>
                     </td>
                   </tr>
@@ -516,6 +514,9 @@ function ShareModal({
 }) {
   const [copied, setCopied] = useState(false);
   const url = `${SITE_URL}/a/${announcement.slug}`;
+  // Facebook caches its first reading of a link; this is how it is asked to
+  // read it again.
+  const debugger_ = `https://developers.facebook.com/tools/debug/?q=${encodeURIComponent(url)}`;
 
   const copy = async () => {
     try {
@@ -543,7 +544,7 @@ function ShareModal({
         </>
       }
     >
-      <p style={{ marginTop: 0 }}>Paste this link into your Messenger group chat:</p>
+      <p style={{ marginTop: 0 }}>Paste this link into any Messenger chat:</p>
       <input className="input" type="text" value={url} readOnly onFocus={(e) => e.target.select()} />
       {!announcement.published && (
         <p className="alert alert--error" style={{ marginTop: "14px" }}>
@@ -555,6 +556,23 @@ function ShareModal({
           No photo attached, so Messenger will use the school seal as the preview image.
         </p>
       )}
+
+      <details className="share-help">
+        <summary>The preview is missing, or shows something old</summary>
+        <p>
+          Facebook reads a link once and remembers what it found - for that link, everywhere.
+          If it first read this one before the poster was attached, or while the site was
+          waking up, every chat keeps showing that first reading until it is told to look
+          again.
+        </p>
+        <p>
+          <a href={debugger_} target="_blank" rel="noopener noreferrer">
+            Open Facebook&apos;s Sharing Debugger
+          </a>{" "}
+          and press <strong>Scrape Again</strong>. Send the link afterwards and the preview
+          is built fresh.
+        </p>
+      </details>
     </Modal>
   );
 }
