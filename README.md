@@ -228,8 +228,9 @@ sent - fine locally, and the startup checks warn if it happens in production.
      suspension is never hidden from anyone.
    - **Re-posted from** — which page it came from (optional).
    - **Link to the original post** — the Facebook post URL (optional).
-   - **Poster and attachments** — the poster image and any files. The first
-     photo becomes the Messenger preview image.
+   - **Poster and attachments** — **Make a poster** draws one from a template
+     (see below), and the file picker takes photos and files you already have.
+     The poster is uploaded first, so it becomes the Messenger preview image.
 3. Keep **Published** ticked → **Create announcement**. Everything, uploads
    included, is saved in that one dialog.
 4. **Share** on that row → **Copy link** → paste into your Messenger group chat.
@@ -243,10 +244,14 @@ computer. Real shareable links start working once it is deployed.
 
 ### Making the poster image
 
-**Poster** on any row opens the poster maker. Pick the kind of notice, type the
-words, and it draws a 1200px PNG in the school's navy — nothing to drag, size
-or align. **Attach to announcement** puts it straight on the post (the first
-photo is the one Messenger shows); **Download PNG** saves it to send by hand.
+Two ways in: **Make a poster** in the New announcement dialog, or **Poster** on
+any row of the dashboard afterwards. Either way you pick the kind of notice,
+type the words, and it draws a 1200px PNG in the school's navy — nothing to
+drag, size or align.
+
+From the new-post dialog, **Use this poster** hands it back and it is uploaded
+with the announcement. From a dashboard row, **Attach to announcement** puts it
+straight on the post. **Download PNG** saves it to send by hand instead.
 
 The templates are Notice, Meeting, Reminders, Class schedule, Exam schedule,
 Class suspension, Holiday, Enrollment, Event, Deadline and General

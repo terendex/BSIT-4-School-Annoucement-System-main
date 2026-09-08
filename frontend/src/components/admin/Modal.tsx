@@ -48,6 +48,13 @@ export default function Modal({
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      // A dialog opened on top of this one - the poster maker over the
+      // announcement editor - owns the keyboard while it is up. Without this
+      // both dialogs answer Escape and the one underneath closes too.
+      const overlay = panelRef.current?.closest(".modal");
+      const from = (event.target as Element | null)?.closest?.(".modal");
+      if (from && overlay && from !== overlay) return;
+
       if (event.key === "Escape" && !busy) {
         onClose();
         return;

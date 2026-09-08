@@ -16,8 +16,16 @@ import type { Announcement, Attachment } from "../../lib/types";
 interface Props {
   /** When present, the finished poster can be attached straight to it. */
   announcement: Announcement | null;
+  /** Seeds the headline when there is no announcement yet - the title being typed. */
+  titleHint?: string;
   onClose: () => void;
   onAttached?: (attachment: Attachment) => void;
+  /**
+   * Hands the finished PNG back instead of uploading it, for the new
+   * announcement dialog - there is nothing to attach it to until that post
+   * has been saved.
+   */
+  onMade?: (poster: File) => void;
 }
 
 /** Every template's values, kept apart so switching back does not lose them. */
@@ -31,14 +39,22 @@ type Draft = Record<string, Record<string, string>>;
  * schedule and a one-line notice go through the same editor and come out
  * looking like the same publication.
  */
-export default function PosterModal({ announcement, onClose, onAttached }: Props) {
+export default function PosterModal({
+  announcement,
+  titleHint,
+  onClose,
+  onAttached,
+  onMade,
+}: Props) {
   const templates = useMemo(
     () => templatesFor(announcement?.category ?? "general"),
     [announcement?.category]
   );
 
   const [templateId, setTemplateId] = useState(templates[0].id);
-  const [draft, setDraft] = useState<Draft>(() => seed(templates, announcement));
+  const [draft, setDraft] = useState<Draft>(() =>
+    seed(templates, announcement?.title ?? titleHint ?? "")
+  );
   const [fitted, setFitted] = useState<Fitted | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -64,7 +80,10 @@ export default function PosterModal({ announcement, onClose, onAttached }: Props
     setNotice("");
   };
 
-  const filename = posterFilename(template.id, announcement?.title ?? template.name);
+  const filename = posterFilename(
+    template.id,
+    announcement?.title || titleHint || template.name
+  );
 
   const download = async () => {
     const canvas = canvasRef.current;
@@ -81,6 +100,20 @@ export default function PosterModal({ announcement, onClose, onAttached }: Props
       setNotice("Poster downloaded.");
     } catch (err) {
       setError((err as Error).message);
+    }
+  };
+
+  const handOver = async () => {
+    const canvas = canvasRef.current;
+    if (!canvas || !onMade) return;
+    setBusy(true);
+    setError("");
+    try {
+      onMade(await canvasToFile(canvas, filename));
+      onClose();
+    } catch (err) {
+      setError((err as Error).message);
+      setBusy(false);
     }
   };
 
@@ -131,6 +164,11 @@ export default function PosterModal({ announcement, onClose, onAttached }: Props
           {announcement && (
             <button type="button" className="btn" onClick={attach} disabled={busy}>
               {busy ? "Attaching..." : "Attach to announcement"}
+            </button>
+          )}
+          {!announcement && onMade && (
+            <button type="button" className="btn" onClick={handOver} disabled={busy}>
+              Use this poster
             </button>
           )}
         </>
@@ -242,14 +280,14 @@ function PosterField({
  * title dropped into the field that carries a sentence - never into a hero,
  * where a full title would be shrunk down to nothing.
  */
-function seed(templates: Template[], announcement: Announcement | null): Draft {
+function seed(templates: Template[], title: string): Draft {
   const draft: Draft = {};
   for (const template of templates) {
     const values = { ...template.defaults };
-    if (announcement) {
+    if (title) {
       for (const name of ["headline", "what"]) {
         if (name in values && template.fields.some((field) => field.name === name)) {
-          values[name] = announcement.title;
+          values[name] = title;
           break;
         }
       }

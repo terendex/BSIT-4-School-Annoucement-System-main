@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import Modal from "./Modal";
+import PosterModal from "./PosterModal";
 import {
   ApiError,
   createAnnouncement,
@@ -46,8 +47,12 @@ export default function AnnouncementModal({
   const [sourcePage, setSourcePage] = useState(announcement?.source_page ?? "");
   const [sourceUrl, setSourceUrl] = useState(announcement?.source_url ?? "");
   const [pages, setPages] = useState<SourcePage[]>([]);
-  // Create mode only: the poster/photos to attach in the same step.
+  // Create mode only: the photos and files to attach in the same step, and
+  // any poster drawn here - kept apart so picking files again, which replaces
+  // the browser's selection, does not quietly discard the poster.
   const [files, setFiles] = useState<File[]>([]);
+  const [posters, setPosters] = useState<File[]>([]);
+  const [makingPoster, setMakingPoster] = useState(false);
   const [progress, setProgress] = useState("");
   const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
@@ -86,9 +91,11 @@ export default function AnnouncementModal({
             ...(slug ? { slug } : {}),
           });
 
-      // Upload anything picked here, so one dialog covers the whole post.
-      for (const [index, file] of files.entries()) {
-        setProgress(`Uploading ${index + 1} of ${files.length}...`);
+      // Upload anything added here, so one dialog covers the whole post. The
+      // poster goes first, so it is the photo Messenger shows.
+      const attachments = [...posters, ...files];
+      for (const [index, file] of attachments.entries()) {
+        setProgress(`Uploading ${index + 1} of ${attachments.length}...`);
         const kind = file.type.startsWith("image/") ? "image" : "file";
         let attachment;
         try {
@@ -138,7 +145,9 @@ export default function AnnouncementModal({
       title={isEdit ? "Edit announcement" : "New announcement"}
       onClose={onClose}
       size="lg"
-      busy={busy}
+      // Modal ignores keys coming from a dialog stacked on top of it; this
+      // covers the gap where focus has landed outside both of them.
+      busy={busy || makingPoster}
       footer={
         <>
           <button type="button" className="btn btn--ghost" onClick={onClose} disabled={busy}>
@@ -298,8 +307,35 @@ export default function AnnouncementModal({
             Photos and files are managed from the Attachments dialog on the dashboard.
           </p>
         ) : (
-          <label className="field" style={{ marginTop: "18px" }}>
+          <div className="field" style={{ marginTop: "18px" }}>
             <span className="field__label">Poster and attachments (optional)</span>
+
+            <div className="poster-pick">
+              <button
+                type="button"
+                className="btn btn--sm"
+                onClick={() => setMakingPoster(true)}
+                disabled={busy}
+              >
+                {posters.length ? "Redo the poster" : "Make a poster"}
+              </button>
+              {posters.length > 0 && (
+                <button
+                  type="button"
+                  className="btn btn--sm btn--ghost"
+                  onClick={() => setPosters([])}
+                  disabled={busy}
+                >
+                  Remove poster
+                </button>
+              )}
+              <span className="field__hint" style={{ margin: 0 }}>
+                {posters.length
+                  ? "Poster ready - it will be the Messenger preview image."
+                  : "Draw one from a template. No image editor needed."}
+              </span>
+            </div>
+
             <input
               className="input"
               type="file"
@@ -313,9 +349,18 @@ export default function AnnouncementModal({
               the Messenger preview image.
               {files.length > 0 && ` ${files.length} selected.`}
             </span>
-          </label>
+          </div>
         )}
       </form>
+
+      {makingPoster && (
+        <PosterModal
+          announcement={null}
+          titleHint={title}
+          onClose={() => setMakingPoster(false)}
+          onMade={(poster) => setPosters([poster])}
+        />
+      )}
     </Modal>
   );
 }
