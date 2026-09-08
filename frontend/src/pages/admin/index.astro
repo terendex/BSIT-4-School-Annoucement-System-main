@@ -330,7 +330,8 @@ import AdminDashboard from "../../components/admin/AdminDashboard.tsx";
   /* ---------------------------------------------------------- poster maker */
   .poster {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 420px);
+    /* The page is landscape now, so the preview earns a wider column. */
+    grid-template-columns: minmax(0, 1fr) minmax(0, 500px);
     gap: 24px;
     align-items: start;
   }
@@ -376,10 +377,117 @@ import AdminDashboard from "../../components/admin/AdminDashboard.tsx";
   .poster__canvas {
     width: 100%;
     height: auto;
-    max-height: 62vh;
-    object-fit: contain;
     box-shadow: var(--shadow-sm);
     background: var(--paper);
+  }
+
+  /* ------------------------------------------- poster row editors */
+  /*
+    A schedule is entered as a row of boxes per subject. The columns are named
+    once in a header strip above them, so each row is just the values.
+  */
+  .poster-rows {
+    display: grid;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+
+  /* The column widths come from the field itself - a schedule may have three
+     columns or five - and are set inline. */
+  .poster-rows__head,
+  .poster-rows__row {
+    display: grid;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .poster-rows__head {
+    font-size: 0.76rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .poster-rows__cell {
+    display: block;
+    min-width: 0;
+  }
+
+  /* The header strip names the columns on a wide screen; the per-box label
+     only appears once the rows stack. */
+  .poster-rows__label {
+    display: none;
+    font-size: 0.76rem;
+    font-weight: 600;
+    color: var(--muted);
+    margin-bottom: 3px;
+  }
+
+  .poster-rows__row .input,
+  .poster-rows__row .select {
+    padding: 7px 9px;
+    font-size: 0.92rem;
+  }
+
+  .poster-rows__remove {
+    padding: 4px 8px;
+    font-size: 1.15rem;
+    line-height: 1;
+    justify-self: center;
+  }
+
+  /* The hint follows the Add button, so it has to break onto its own line. */
+  .poster-rows__hint {
+    display: block;
+    margin-top: 10px;
+  }
+
+  .poster-rows__toggle {
+    float: right;
+    font-weight: 400;
+    padding: 1px 8px;
+  }
+
+  /* One subject's heading and the points under it. */
+  .poster-group {
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    padding: 10px;
+    margin-bottom: 10px;
+    background: var(--navy-50);
+  }
+
+  .poster-group__head {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+
+  .poster-group .textarea {
+    min-height: 0;
+  }
+
+  @media (max-width: 900px) {
+    .poster-rows__head {
+      display: none;
+    }
+
+    .poster-rows__row {
+      grid-template-columns: 1fr 1fr 34px !important;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+    }
+
+    .poster-rows__label {
+      display: block;
+    }
+
+    .poster-rows__remove {
+      align-self: end;
+    }
   }
 
   /* The "make a poster" row above the file picker in the new-post dialog. */
@@ -392,8 +500,55 @@ import AdminDashboard from "../../components/admin/AdminDashboard.tsx";
   }
 
   .poster__meta {
-    margin-top: 10px;
+    margin-top: 8px;
     text-align: center;
+  }
+
+  /* A poster longer than one page previews as the images it will become. */
+  .poster__page {
+    margin: 0 0 16px;
+  }
+
+  /* Short fields pair off, so a date and a time do not take two rows. */
+  .poster-pair {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  .poster-pair .field {
+    min-width: 0;
+  }
+
+  /* The embellishments - a note, a closing line - start folded away. */
+  .poster-more {
+    border-top: 1px solid var(--line);
+    margin-top: 18px;
+    padding-top: 12px;
+  }
+
+  .poster-more > summary {
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--navy-700);
+    list-style: none;
+  }
+
+  .poster-more > summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .poster-more > summary::before {
+    content: "+ ";
+  }
+
+  .poster-more[open] > summary::before {
+    content: "− ";
+  }
+
+  .poster-more__body {
+    margin-top: 14px;
   }
 
   .attachment-list {
@@ -579,9 +734,6 @@ import AdminDashboard from "../../components/admin/AdminDashboard.tsx";
       order: -1;
     }
 
-    .poster__canvas {
-      max-height: 44vh;
-    }
   }
 
   @media (max-width: 640px) {

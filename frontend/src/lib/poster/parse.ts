@@ -95,14 +95,21 @@ export function parseSections(raw: string): Section[] {
   return sections.filter((section) => section.heading || section.items.length);
 }
 
-/** Splits one schedule line into its columns. */
+/**
+ * Splits one schedule line into its columns.
+ *
+ * Bars are positional: `IT 123 | Mon | | B03` means the time is blank, not
+ * that the room slides left into the time column, so empty cells are kept.
+ * The looser separators are what someone types by hand, where a double space
+ * is a separator rather than a blank column, so there the empties go.
+ */
 function splitColumns(line: string): string[] {
   const source = line.trim().replace(LEADING_MARKER, "");
-  const separator = source.includes("|")
-    ? /\s*\|\s*/
-    : /\s+[-–—]\s+|\s{2,}|\s*,\s*/;
+  if (source.includes("|")) {
+    return source.split(/\s*\|\s*/).map((cell) => cell.trim());
+  }
   return source
-    .split(separator)
+    .split(/\s+[-–—]\s+|\s{2,}|\s*,\s*/)
     .map((cell) => cell.trim())
     .filter((cell) => cell.length > 0);
 }
@@ -140,7 +147,9 @@ export function parseSchedule(raw: string): Schedule {
     body = lines.slice(1);
   }
 
-  const rows = body.map(splitColumns).filter((row) => row.length > 0);
+  const rows = body
+    .map(splitColumns)
+    .filter((row) => row.some((cell) => cell.length > 0));
   if (rows.length === 0) return { head, rows };
 
   const columns = Math.max(head.length, ...rows.map((row) => row.length));
@@ -156,6 +165,49 @@ export function parseSchedule(raw: string): Schedule {
       return padded;
     }),
   };
+}
+
+/**
+ * Writes a schedule back out in the format `parseSchedule` reads.
+ *
+ * The editor shows a row of labelled boxes per subject, but what is stored is
+ * still the plain text - so someone can switch to the text view, paste a list
+ * in from a group chat, and switch back without anything being lost. The
+ * column names are written out as a `#` line so the labels survive the trip.
+ */
+export function serialiseSchedule(head: string[], rows: string[][]): string {
+  const lines = [`# ${head.join(" | ")}`];
+  for (const row of rows) {
+    // A row with nothing in it at all is left out rather than written as bars.
+    if (row.every((cell) => cell.trim() === "")) continue;
+    // Cells are written as typed. Trimming here would fight the editor: the
+    // space someone just typed at the end of a word would be taken back off
+    // before they could type the next letter.
+    lines.push(head.map((_, column) => row[column] ?? "").join(" | "));
+  }
+  return lines.join("\n");
+}
+
+/**
+ * Writes headed groups of points back out in the format `parseSections`
+ * reads.
+ *
+ * `body` is the points exactly as typed, one per line, with the writer's own
+ * indentation kept - nesting is ranked against the other lines, so their two
+ * spaces or four both work. Every point gets an extra two spaces on top, so
+ * one that happens to end in a colon ("Bring these:") cannot be read back as
+ * a heading of its own.
+ */
+export function serialiseSections(groups: Array<{ heading: string; body: string }>): string {
+  const lines: string[] = [];
+  for (const group of groups) {
+    const heading = group.heading.trim();
+    const points = group.body.split("\n").filter((line) => line.trim() !== "");
+    if (!heading && points.length === 0) continue;
+    if (heading) lines.push(`${heading}:`);
+    for (const point of points) lines.push(`  ${point}`);
+  }
+  return lines.join("\n");
 }
 
 const DAY_ORDER = [

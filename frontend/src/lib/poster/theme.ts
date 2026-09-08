@@ -29,27 +29,27 @@ export const TONES: Record<string, string> = {
 };
 
 /**
- * Posters are authored at 1200 wide. That is the width Facebook and Messenger
- * ask for, and it divides cleanly into the margins below.
+ * The page is the size Messenger renders a shared link at.
+ *
+ * Facebook's large link card is 1.91:1 and it scales whatever it is given to
+ * fit that, so a square poster arrives at barely half the width - every word
+ * on it half the size it could have been. Authoring at the card's own shape
+ * means nothing is scaled down on the way, which is the whole reason the
+ * poster exists: to be readable in the chat without opening anything.
+ *
+ * Nothing grows. Content that does not fit continues onto a second page,
+ * which is posted as a second image.
  */
 export const PAGE_WIDTH = 1200;
+export const PAGE_HEIGHT = 630;
 
-/** A square is the starting shape. Tall content grows down from here. */
-export const PAGE_MIN_HEIGHT = 1200;
-
-/** The tallest a poster may grow before the layout has to shrink type instead. */
-export const PAGE_MAX_HEIGHT = 2100;
-
-/** Height is grown in whole steps so posters do not end up at odd sizes. */
-export const PAGE_HEIGHT_STEP = 100;
-
-export const MARGIN_X = 90;
-export const MARGIN_TOP = 96;
-export const MARGIN_BOTTOM = 96;
+export const MARGIN_X = 74;
+export const MARGIN_TOP = 40;
+export const MARGIN_BOTTOM = 48;
 
 /** The navy rules that frame the top and bottom edge of every poster. */
-export const FRAME_TOP = 26;
-export const FRAME_BOTTOM = 34;
+export const FRAME_TOP = 14;
+export const FRAME_BOTTOM = 18;
 
 export const CONTENT_WIDTH = PAGE_WIDTH - MARGIN_X * 2;
 
@@ -69,14 +69,17 @@ export function font(size: number, weight: number | string = 400): string {
  * not a promise.
  */
 export const TYPE = {
-  banner: 74,
-  hero: 150,
-  headline: 62,
-  section: 46,
-  lead: 42,
-  body: 36,
-  bullet: 34,
-  sub: 30,
-  small: 27,
-  caption: 24,
+  banner: 52,
+  hero: 104,
+  headline: 44,
+  section: 32,
+  lead: 32,
+  body: 27,
+  bullet: 26,
+  sub: 22,
+  small: 20,
+  caption: 17,
 } as const;
+
+/** The room a page has for content, once the margins are taken off. */
+export const CONTENT_HEIGHT = PAGE_HEIGHT - MARGIN_TOP - MARGIN_BOTTOM;

@@ -258,28 +258,42 @@ Class suspension, Holiday, Enrollment, Event, Deadline and General
 announcement. The ones that suit the announcement's category are listed first,
 but any template can be used for any post.
 
-Two fields take a list rather than a sentence:
+Two fields are a list of things rather than a sentence, and both are filled in
+as labelled boxes — no bars, no indenting, nothing to line up by hand:
 
-- **Bullets** — one per line. Indent a line to nest it under the line above,
-  and again for a third level. Tabs, two spaces or four all work, as long as
-  you are consistent; pasted `-` and `•` characters are stripped.
-- **Entries** (schedules) — one class or exam per line, columns separated by
-  `|`:
+- **Entries** (Class schedule, Exam schedule) — a row per subject: Subject,
+  Day, Time, Room, with the day as a dropdown. **Add row** for another,
+  **×** to drop one. Leave a box empty if it does not apply.
+- **Sections** (Reminders) — a block per subject: the subject on top, its
+  points underneath, one per line. Indent a line to nest it under the one
+  above. **Add subject** for another.
 
-  ```
-  IT 123 - Systems Administration | Mon | 8:00 - 10:00 AM | B03
-  ```
+**Edit as text** on either field switches to the plain-text view, which is what
+is actually stored:
 
-  Dashes, commas or runs of spaces work as separators too, and a line missing
-  its room will not shear the table. Start a line with `#` to name the columns
-  yourself.
+```
+# Subject | Day | Time | Room
+IT 123 - Systems Administration | Monday | 8:00 - 10:00 AM | B03
+```
 
-Nothing has to be sized by hand. A few subjects are set as cards, a dozen as a
-table, and a full week is grouped under a heading per day; longer than that and
-it goes back to one table, set in two columns where the entries are short
-enough. The poster grows taller as it fills up, and only once it has run out of
-room does the type shrink - the editor prints the final size under the preview,
-and says so when there is more text than fits on one poster.
+That is there so you can paste a list straight out of a group chat — dashes,
+commas or runs of spaces work as separators too — and switch back to the boxes
+with it already filled in. The two views are interchangeable in both
+directions.
+
+Nothing has to be sized by hand. Every page is 1200x630 — the exact shape
+Messenger renders a shared link at — so the poster fills the card instead of
+being scaled down to fit it, which is what made a square one hard to read in a
+group chat.
+
+A few subjects are set as cards, a dozen as a table, and a full week is grouped
+under a heading per day. When there is more than one page holds, the poster
+continues onto a **second image** rather than shrinking: each page is uploaded
+as its own photo, in order, and the first one is what Messenger shows on the
+link. Continuation pages carry the banner and a "continued" marker at the top
+and a page number at the foot, so an image forwarded on its own still makes
+sense. The type is only reduced when a small reduction saves a whole extra
+image. The editor previews every page and says how many there will be.
 
 ### Re-posting from the SLC Facebook pages
 

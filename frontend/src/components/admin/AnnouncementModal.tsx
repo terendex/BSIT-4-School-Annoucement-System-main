@@ -330,9 +330,11 @@ export default function AnnouncementModal({
                 </button>
               )}
               <span className="field__hint" style={{ margin: 0 }}>
-                {posters.length
-                  ? "Poster ready - it will be the Messenger preview image."
-                  : "Draw one from a template. No image editor needed."}
+                {posters.length === 0
+                  ? "Draw one from a template. No image editor needed."
+                  : posters.length === 1
+                    ? "Poster ready - it will be the Messenger preview image."
+                    : `${posters.length} pages ready - the first is the Messenger preview image.`}
               </span>
             </div>
 
@@ -358,7 +360,7 @@ export default function AnnouncementModal({
           announcement={null}
           titleHint={title}
           onClose={() => setMakingPoster(false)}
-          onMade={(poster) => setPosters([poster])}
+          onMade={setPosters}
         />
       )}
     </Modal>

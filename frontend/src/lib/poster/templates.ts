@@ -32,6 +32,10 @@ export interface Field {
   type: FieldType;
   hint?: string;
   placeholder?: string;
+  /** Folded away under "More options" - a poster reads fine without it. */
+  optional?: boolean;
+  /** Short enough to sit two to a row, so the form is not a long column. */
+  half?: boolean;
 }
 
 export interface Template {
@@ -220,7 +224,7 @@ function footer(footnote: string): Block[] {
 // The templates
 // --------------------------------------------------------------------------
 
-export const TEMPLATES: Template[] = [
+const DEFINED: Template[] = [
   {
     id: "notice",
     name: "Notice",
@@ -243,7 +247,7 @@ export const TEMPLATES: Template[] = [
     build: (values) => ({
       blocks: compact([
         { kind: "banner", text: value(values, "banner") || "NOTICE" },
-        { kind: "space", h: 40 },
+        { kind: "space", h: 16 },
         textBlock(value(values, "lead"), { size: TYPE.lead, align: "center", color: MUTED }),
         heroBlock(value(values, "hero")),
         textBlock(value(values, "trail"), { size: TYPE.lead, align: "center" }),
@@ -278,7 +282,7 @@ export const TEMPLATES: Template[] = [
     build: (values) => ({
       blocks: compact([
         { kind: "banner", text: value(values, "banner") || "REMINDER" },
-        { kind: "space", h: 40 },
+        { kind: "space", h: 16 },
         textBlock(value(values, "lead"), { size: TYPE.lead, align: "center", color: MUTED }),
         heroBlock(value(values, "hero")),
         textBlock(value(values, "date"), { size: TYPE.lead, weight: 700, align: "center" }),
@@ -308,19 +312,23 @@ export const TEMPLATES: Template[] = [
     ],
     defaults: {
       banner: "REMINDERS",
+      // Every point is indented under its heading, so a point that ends in a
+      // colon stays a point instead of becoming a heading of its own.
       body: [
         "IT 123:",
-        "Quiz 1 on Tuesday",
-        "  Bring your own formatted flashdrive (labeled with your name)",
-        "  It is hands-on",
-        "Practice core command line basics:",
-        "  Path finding",
-        "  Creating folders",
-        "  Copy folders and files",
+        "  Quiz 1 on Tuesday",
+        "    Bring your own formatted flashdrive (labeled with your name)",
+        "    It is hands-on",
+        "  Practice core command line basics",
+        "    Path finding",
+        "    Creating folders",
+        "    Copy folders and files",
         "IT 124:",
-        "Prepare your system and papers for pilot testing",
-        "  Do this as soon as possible to gain leverage",
-        "System checking: ask Sir Jake for a schedule",
+        "  Prepare your system and papers for pilot testing",
+        "    Do this as soon as possible to gain leverage",
+        "  System checking: ask Sir Jake for a schedule",
+        "CFE 6A:",
+        "  TBA",
       ].join("\n"),
       tip:
         "Use && to run multiple commands at once. Press the up arrow to reuse previous commands.",
@@ -458,7 +466,7 @@ export const TEMPLATES: Template[] = [
       accent: TONES.danger,
       blocks: compact([
         { kind: "banner", text: value(values, "banner") || "CLASS SUSPENSION" },
-        { kind: "space", h: 30 },
+        { kind: "space", h: 12 },
         heroBlock(value(values, "hero")),
         detailBlock([
           ["For", value(values, "scope")],
@@ -495,7 +503,7 @@ export const TEMPLATES: Template[] = [
     build: (values) => ({
       blocks: compact([
         { kind: "banner", text: value(values, "banner") || "HOLIDAY" },
-        { kind: "space", h: 30 },
+        { kind: "space", h: 12 },
         heroBlock(value(values, "hero")),
         textBlock(value(values, "detail"), { size: TYPE.lead, align: "center" }),
         detailBlock([
@@ -590,7 +598,7 @@ export const TEMPLATES: Template[] = [
     build: (values) => ({
       blocks: compact([
         { kind: "banner", text: value(values, "banner") || "EVENT" },
-        { kind: "space", h: 20 },
+        { kind: "space", h: 10 },
         heroBlock(value(values, "hero")),
         textBlock(value(values, "tagline"), { size: TYPE.lead, align: "center", color: MUTED }),
         detailBlock([
@@ -678,7 +686,7 @@ export const TEMPLATES: Template[] = [
     build: (values) => ({
       blocks: compact([
         { kind: "banner", text: value(values, "banner") || "ANNOUNCEMENT" },
-        { kind: "space", h: 20 },
+        { kind: "space", h: 10 },
         value(values, "headline")
           ? { kind: "headline", text: value(values, "headline") }
           : null,
@@ -690,6 +698,40 @@ export const TEMPLATES: Template[] = [
     }),
   },
 ];
+
+/**
+ * Fields that are an embellishment rather than the message. They are folded
+ * away so that opening a template shows the three or four boxes that actually
+ * have to be filled in, not a column of eleven.
+ */
+const OPTIONAL = new Set(["subtitle", "note", "tip", "footnote", "details", "tagline"]);
+
+/** Fields short enough to pair off, so a date and a time share a row. */
+const HALF = new Set([
+  "when",
+  "date",
+  "time",
+  "place",
+  "where",
+  "who",
+  "scope",
+  "resume",
+]);
+
+/**
+ * The same judgement applied across every template: a field called "footnote"
+ * is optional wherever it appears, and a field called "time" is short wherever
+ * it appears. Marking them here rather than on each definition keeps the
+ * templates about their words.
+ */
+export const TEMPLATES: Template[] = DEFINED.map((template) => ({
+  ...template,
+  fields: template.fields.map((field) => ({
+    ...field,
+    optional: field.optional ?? OPTIONAL.has(field.name),
+    half: field.half ?? HALF.has(field.name),
+  })),
+}));
 
 export const TEMPLATE_BY_ID = new Map(TEMPLATES.map((template) => [template.id, template]));
 

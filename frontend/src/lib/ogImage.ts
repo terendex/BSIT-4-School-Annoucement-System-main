@@ -2,8 +2,12 @@
  * Builds the image Messenger and Facebook show in a link preview.
  *
  * Their card is roughly 1.91:1, and they *crop* whatever you give them to fit.
- * A portrait poster or a square graphic therefore loses its top and bottom -
+ * A portrait photo or a square graphic therefore loses its top and bottom -
  * exactly the part of an exam schedule or event poster that matters.
+ *
+ * Posters made in the poster maker are already 1200x630, so this leaves them
+ * exactly as they are. It is the photos people upload themselves - screenshots
+ * off a phone, mostly - that need the padding.
  *
  * Cloudinary can pad instead of crop, so the whole poster is visible with the
  * spare space filled in. That happens in the delivery URL, so there is no

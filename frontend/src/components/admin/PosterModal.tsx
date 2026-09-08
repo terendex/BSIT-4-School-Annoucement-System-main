@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Modal from "./Modal";
 import { ApiError, uploadAttachment } from "../../lib/adminClient";
+import { ScheduleField, SectionsField } from "./posterFields";
 import {
-  canvasToFile,
-  posterFilename,
-  postersFrom,
-  renderPoster,
+  pageCaption,
+  paintPage,
+  planPoster,
+  posterFiles,
   templatesFor,
   type Field,
-  type Fitted,
   type Template,
 } from "../../lib/poster";
 import type { Announcement, Attachment } from "../../lib/types";
@@ -19,13 +19,13 @@ interface Props {
   /** Seeds the headline when there is no announcement yet - the title being typed. */
   titleHint?: string;
   onClose: () => void;
-  onAttached?: (attachment: Attachment) => void;
+  onAttached?: (attachments: Attachment[]) => void;
   /**
-   * Hands the finished PNG back instead of uploading it, for the new
-   * announcement dialog - there is nothing to attach it to until that post
+   * Hands the finished PNGs back instead of uploading them, for the new
+   * announcement dialog - there is nothing to attach them to until that post
    * has been saved.
    */
-  onMade?: (poster: File) => void;
+  onMade?: (posters: File[]) => void;
 }
 
 /** Every template's values, kept apart so switching back does not lose them. */
@@ -35,9 +35,9 @@ type Draft = Record<string, Record<string, string>>;
  * Makes the poster that goes with an announcement.
  *
  * There is nothing to drag and nothing to position: pick the kind of notice,
- * type the words, and the layout engine sizes and arranges it. A long class
- * schedule and a one-line notice go through the same editor and come out
- * looking like the same publication.
+ * type the words, and the layout engine sizes and arranges it. Pages are the
+ * shape Messenger shows a shared link at, and a poster with more on it than
+ * one page holds continues onto a second image.
  */
 export default function PosterModal({
   announcement,
@@ -55,22 +55,26 @@ export default function PosterModal({
   const [draft, setDraft] = useState<Draft>(() =>
     seed(templates, announcement?.title ?? titleHint ?? "")
   );
-  const [fitted, setFitted] = useState<Fitted | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
-  const canvasRef = useRef<HTMLCanvasElement>(null);
   const template = templates.find((item) => item.id === templateId) ?? templates[0];
   const values = draft[template.id] ?? template.defaults;
+  const title = announcement?.title || titleHint || template.name;
 
-  // Redraw whenever the words change. Rendering is a few milliseconds of
-  // canvas work, so there is no need to debounce the typing.
+  // Laying out is a few milliseconds of measuring, so there is no need to
+  // debounce the typing.
+  const layout = useMemo(() => planPoster(template.id, values), [template.id, values]);
+
+  const canvases = useRef<Array<HTMLCanvasElement | null>>([]);
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    setFitted(renderPoster(canvas, postersFrom(template.id, values)));
-  }, [template.id, values]);
+    if (!layout) return;
+    layout.pages.forEach((_, index) => {
+      const canvas = canvases.current[index];
+      if (canvas) paintPage(canvas, layout, index);
+    });
+  }, [layout]);
 
   const setField = (name: string, next: string) => {
     setDraft((current) => ({
@@ -80,36 +84,37 @@ export default function PosterModal({
     setNotice("");
   };
 
-  const filename = posterFilename(
-    template.id,
-    announcement?.title || titleHint || template.name
-  );
+  const pages = layout?.pages.length ?? 0;
+  const sheets = pages > 1 ? "pages" : "poster";
 
   const download = async () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!layout) return;
     setError("");
     try {
-      const file = await canvasToFile(canvas, filename);
-      const url = URL.createObjectURL(file);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = filename;
-      link.click();
-      URL.revokeObjectURL(url);
-      setNotice("Poster downloaded.");
+      const files = await posterFiles(layout, title, template.id);
+      files.forEach((file, index) => {
+        // Browsers throttle several downloads fired off at once.
+        setTimeout(() => {
+          const url = URL.createObjectURL(file);
+          const link = document.createElement("a");
+          link.href = url;
+          link.download = file.name;
+          link.click();
+          URL.revokeObjectURL(url);
+        }, index * 400);
+      });
+      setNotice(files.length > 1 ? `${files.length} pages downloaded.` : "Poster downloaded.");
     } catch (err) {
       setError((err as Error).message);
     }
   };
 
   const handOver = async () => {
-    const canvas = canvasRef.current;
-    if (!canvas || !onMade) return;
+    if (!layout || !onMade) return;
     setBusy(true);
     setError("");
     try {
-      onMade(await canvasToFile(canvas, filename));
+      onMade(await posterFiles(layout, title, template.id));
       onClose();
     } catch (err) {
       setError((err as Error).message);
@@ -118,19 +123,28 @@ export default function PosterModal({
   };
 
   const attach = async () => {
-    const canvas = canvasRef.current;
-    if (!canvas || !announcement) return;
+    if (!layout || !announcement) return;
     setBusy(true);
     setError("");
     setNotice("");
     try {
-      const file = await canvasToFile(canvas, filename);
-      const attachment = await uploadAttachment(announcement.id, file, "image", template.name);
-      onAttached?.(attachment);
+      const files = await posterFiles(layout, title, template.id);
+      const attached: Attachment[] = [];
+      for (const [index, file] of files.entries()) {
+        attached.push(
+          await uploadAttachment(
+            announcement.id,
+            file,
+            "image",
+            pageCaption(template.name, index, files.length)
+          )
+        );
+      }
+      onAttached?.(attached);
       setNotice(
         announcement.image_count === 0
-          ? "Poster attached. It is now the Messenger preview image."
-          : "Poster attached."
+          ? `The ${sheets} are attached, and the first is now the Messenger preview image.`
+          : `The ${sheets} are attached.`
       );
     } catch (err) {
       setError((err as ApiError).message || "The poster could not be attached.");
@@ -138,6 +152,34 @@ export default function PosterModal({
       setBusy(false);
     }
   };
+
+  const main = template.fields.filter((field) => !field.optional);
+  const extra = template.fields.filter((field) => field.optional);
+
+  const renderFields = (fields: Field[]) =>
+    pairUp(fields).map((row) =>
+      row.length === 1 ? (
+        <PosterField
+          key={row[0].name}
+          field={row[0]}
+          value={values[row[0].name] ?? ""}
+          disabled={busy}
+          onChange={(next) => setField(row[0].name, next)}
+        />
+      ) : (
+        <div className="poster-pair" key={row.map((field) => field.name).join("-")}>
+          {row.map((field) => (
+            <PosterField
+              key={field.name}
+              field={field}
+              value={values[field.name] ?? ""}
+              disabled={busy}
+              onChange={(next) => setField(field.name, next)}
+            />
+          ))}
+        </div>
+      )
+    );
 
   return (
     <Modal
@@ -159,7 +201,7 @@ export default function PosterModal({
             Reset text
           </button>
           <button type="button" className="btn btn--ghost" onClick={download} disabled={busy}>
-            Download PNG
+            {pages > 1 ? `Download ${pages} images` : "Download PNG"}
           </button>
           {announcement && (
             <button type="button" className="btn" onClick={attach} disabled={busy}>
@@ -199,32 +241,50 @@ export default function PosterModal({
             <span className="field__hint">{template.blurb}</span>
           </label>
 
-          {template.fields.map((field) => (
-            <PosterField
-              key={field.name}
-              field={field}
-              value={values[field.name] ?? ""}
-              disabled={busy}
-              onChange={(next) => setField(field.name, next)}
-            />
-          ))}
+          {renderFields(main)}
+
+          {extra.length > 0 && (
+            <details className="poster-more">
+              <summary>More options ({extra.length})</summary>
+              <div className="poster-more__body">{renderFields(extra)}</div>
+            </details>
+          )}
         </div>
 
         <div className="poster__preview">
-          <div className="poster__stage">
-            <canvas ref={canvasRef} className="poster__canvas" />
-          </div>
+          {layout ? (
+            layout.pages.map((_, index) => (
+              <figure className="poster__page" key={index}>
+                <div className="poster__stage">
+                  <canvas
+                    className="poster__canvas"
+                    ref={(element) => {
+                      canvases.current[index] = element;
+                    }}
+                  />
+                </div>
+                {layout.pages.length > 1 && (
+                  <figcaption className="field__hint poster__meta">
+                    {index === 0
+                      ? "Page 1 - the one Messenger shows on the link"
+                      : `Page ${index + 1} of ${layout.pages.length}`}
+                  </figcaption>
+                )}
+              </figure>
+            ))
+          ) : (
+            <p className="field__hint">Rendering...</p>
+          )}
+
           <p className="field__hint poster__meta">
-            {fitted
-              ? `${fitted.width} x ${fitted.height} px${
-                  fitted.scale < 1 ? ` - type reduced to ${Math.round(fitted.scale * 100)}%` : ""
-                }`
-              : "Rendering..."}
+            {pages > 1
+              ? `${pages} images, each the size of a Messenger link preview.`
+              : "Sized to fill a Messenger link preview."}
           </p>
-          {fitted?.overflow && (
+
+          {layout?.overflow && (
             <p className="alert alert--error poster__meta">
-              There is more text here than fits on one poster. Shorten it, or split it across
-              two.
+              One part of this is too big for a page of its own. Shorten it.
             </p>
           )}
         </div>
@@ -233,18 +293,28 @@ export default function PosterModal({
   );
 }
 
-/** One field, rendered as an input or a textarea depending on its type. */
-function PosterField({
-  field,
-  value,
-  disabled,
-  onChange,
-}: {
+/** Groups the short fields into pairs, so a date and a time share a row. */
+function pairUp(fields: Field[]): Field[][] {
+  const rows: Field[][] = [];
+  for (const field of fields) {
+    const last = rows[rows.length - 1];
+    if (field.half && last?.length === 1 && last[0].half) last.push(field);
+    else rows.push([field]);
+  }
+  return rows;
+}
+
+/** One field. Lists of things get their own row editors; the rest are boxes. */
+function PosterField(props: {
   field: Field;
   value: string;
   disabled: boolean;
   onChange: (next: string) => void;
 }) {
+  if (props.field.type === "schedule") return <ScheduleField {...props} />;
+  if (props.field.type === "sections") return <SectionsField {...props} />;
+
+  const { field, value, disabled, onChange } = props;
   const multiline = field.type !== "line";
   const prose = field.type === "text";
 
@@ -257,7 +327,7 @@ function PosterField({
           value={value}
           onChange={(event) => onChange(event.target.value)}
           disabled={disabled}
-          rows={prose ? 3 : field.type === "list" ? 6 : 10}
+          rows={prose ? 3 : 6}
           spellCheck
         />
       ) : (

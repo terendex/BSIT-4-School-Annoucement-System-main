@@ -447,7 +447,7 @@ export default function AdminDashboard() {
         <PosterModal
           announcement={dialog.announcement}
           onClose={close}
-          onAttached={(attachment) => upsert(withPoster(dialog.announcement, attachment))}
+          onAttached={(attachments) => upsert(withPoster(dialog.announcement, attachments))}
         />
       )}
 
@@ -489,14 +489,16 @@ export default function AdminDashboard() {
 /**
  * The announcement as it stands once a poster has been attached to it - the
  * counts the table shows, and the cover the link preview uses when it is the
- * first photo.
+ * first photo. A long poster arrives as several pages, so this takes them all
+ * at once rather than being called per page against a stale copy.
  */
-function withPoster(announcement: Announcement, attachment: Attachment): Announcement {
+function withPoster(announcement: Announcement, attachments: Attachment[]): Announcement {
+  const images = [...announcement.images, ...attachments];
   return {
     ...announcement,
-    images: [...announcement.images, attachment],
-    image_count: announcement.image_count + 1,
-    cover_image: announcement.cover_image ?? attachment,
+    images,
+    image_count: images.length,
+    cover_image: announcement.cover_image ?? attachments[0] ?? null,
   };
 }
 
