@@ -32,7 +32,7 @@ type Dialog =
   | { type: "publishers" }
   | { type: "password" };
 
-const EMPTY_TAXONOMY: Taxonomy = { categories: [], year_levels: [] };
+const EMPTY_TAXONOMY: Taxonomy = { categories: [], year_levels: [], sections: [] };
 
 /**
  * Every action happens in a modal - nothing here triggers a full page reload,
@@ -53,6 +53,7 @@ export default function AdminDashboard() {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("");
   const [year, setYear] = useState("");
+  const [section, setSection] = useState("");
   const [dialog, setDialog] = useState<Dialog>({ type: "none" });
 
   const isAdmin = user?.role === "admin";
@@ -67,7 +68,9 @@ export default function AdminDashboard() {
     isAdmin || announcement.author === user?.id;
 
   const load = useCallback(
-    async (filters: { search?: string; category?: string; year?: string } = {}) => {
+    async (
+      filters: { search?: string; category?: string; year?: string; section?: string } = {}
+    ) => {
       setLoading(true);
       setError("");
       try {
@@ -124,10 +127,11 @@ export default function AdminDashboard() {
     if (user && !user.must_change_password) void load();
   }, [user, load]);
 
-  const applyFilters = (next: { category?: string; year?: string }) => {
-    const merged = { search, category, year, ...next };
+  const applyFilters = (next: { category?: string; year?: string; section?: string }) => {
+    const merged = { search, category, year, section, ...next };
     setCategory(merged.category);
     setYear(merged.year);
+    setSection(merged.section);
     void load(merged);
   };
 
@@ -238,7 +242,7 @@ export default function AdminDashboard() {
         className="searchbar"
         onSubmit={(event) => {
           event.preventDefault();
-          void load({ search, category, year });
+          void load({ search, category, year, section });
         }}
         role="search"
       >
@@ -278,10 +282,25 @@ export default function AdminDashboard() {
               </option>
             ))}
         </select>
+        <select
+          className="select"
+          value={section}
+          onChange={(event) => applyFilters({ section: event.target.value })}
+          aria-label="Filter by section"
+        >
+          <option value="">All sections</option>
+          {taxonomy.sections
+            .filter((item) => item.slug !== "all")
+            .map((item) => (
+              <option key={item.slug} value={item.slug}>
+                {item.name}
+              </option>
+            ))}
+        </select>
         <button type="submit" className="btn btn--ghost">
           Search
         </button>
-        {(search || category || year) && (
+        {(search || category || year || section) && (
           <button
             type="button"
             className="btn btn--ghost"
@@ -289,6 +308,7 @@ export default function AdminDashboard() {
               setSearch("");
               setCategory("");
               setYear("");
+              setSection("");
               void load();
             }}
           >
@@ -342,8 +362,8 @@ export default function AdminDashboard() {
                       <span className={`tag tag--${toneFor(taxonomy, announcement.category)}`}>
                         {announcement.category_name}
                       </span>
-                      {announcement.year_level !== "all" && (
-                        <span className="tag">{announcement.year_level_name}</span>
+                      {announcement.audience_name && (
+                        <span className="tag">{announcement.audience_name}</span>
                       )}
                     </td>
                     <td data-label="Status">

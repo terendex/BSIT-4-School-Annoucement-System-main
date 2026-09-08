@@ -825,6 +825,12 @@ class TaxonomyFilterTests(TestCase):
         self.exam_1st = Announcement.objects.create(
             title="Prelims for 1st year", category="exam", year_level="1"
         )
+        self.section_a = Announcement.objects.create(
+            title="4A system checking", category="general", year_level="4", section="a"
+        )
+        self.section_b = Announcement.objects.create(
+            title="4B system checking", category="general", year_level="4", section="b"
+        )
         self.draft = Announcement.objects.create(
             title="Draft holiday", category="holiday", published=False
         )
@@ -838,6 +844,7 @@ class TaxonomyFilterTests(TestCase):
         fresh = Announcement.objects.create(title="Plain")
         self.assertEqual(fresh.category, "general")
         self.assertEqual(fresh.year_level, "all")
+        self.assertEqual(fresh.section, "all")
 
     def test_filtering_by_category(self):
         self.assertEqual(
@@ -846,14 +853,51 @@ class TaxonomyFilterTests(TestCase):
         )
 
     def test_filtering_by_year_keeps_all_year_posts(self):
-        # A 4th year student must still see a campus-wide suspension.
-        self.assertEqual(self.titles("?year=4"), {"Prelims for 4th year", "No classes"})
+        # A 4th year student must still see a campus-wide suspension, and both
+        # sections of their own year.
+        self.assertEqual(
+            self.titles("?year=4"),
+            {"Prelims for 4th year", "No classes", "4A system checking", "4B system checking"},
+        )
 
     def test_the_two_filters_combine(self):
         self.assertEqual(self.titles("?category=exam&year=1"), {"Prelims for 1st year"})
 
     def test_year_all_means_no_narrowing(self):
-        self.assertEqual(len(self.titles("?year=all")), 3)
+        self.assertEqual(len(self.titles("?year=all")), 5)
+
+    def test_filtering_by_section_keeps_the_posts_for_every_section(self):
+        # Section A must still see what was addressed to the whole school.
+        self.assertEqual(
+            self.titles("?section=a"),
+            {"4A system checking", "No classes", "Prelims for 4th year", "Prelims for 1st year"},
+        )
+
+    def test_filtering_by_section_hides_the_other_sections(self):
+        self.assertNotIn("4B system checking", self.titles("?section=a"))
+
+    def test_year_and_section_combine_to_one_class(self):
+        self.assertEqual(
+            self.titles("?year=4&section=a"),
+            {"4A system checking", "No classes", "Prelims for 4th year"},
+        )
+
+    def test_section_all_means_no_narrowing(self):
+        self.assertEqual(len(self.titles("?section=all")), 5)
+
+    def test_an_unknown_section_falls_back_to_the_posts_for_everybody(self):
+        # Same as an unknown year: the value matches no section, so what is
+        # left is what was addressed to every section. Nothing is revealed
+        # that a reader could not already see, and nothing 500s.
+        self.assertEqual(self.titles("?section=zzz"), self.titles("?section=all&year=all") - {
+            "4A system checking",
+            "4B system checking",
+        })
+
+    def test_the_audience_label_reads_as_the_class_is_called(self):
+        self.assertEqual(self.section_a.audience_name, "4A")
+        self.assertEqual(self.exam_4th.audience_name, "4th year")
+        self.assertEqual(self.suspension.audience_name, "")
 
     def test_filters_never_reveal_drafts(self):
         self.assertNotIn("Draft holiday", self.titles("?category=holiday"))
@@ -865,7 +909,16 @@ class TaxonomyFilterTests(TestCase):
         response = self.client.get(reverse("feed-state") + "?category=exam")
         self.assertEqual(response.data["count"], 2)
 
-    def test_taxonomy_endpoint_lists_both_axes(self):
+    def test_feed_state_follows_the_section_filter_too(self):
+        # If it did not, a reader filtered to one section would be told to
+        # reload every time any other section was posted to.
+        response = self.client.get(reverse("feed-state") + "?section=b")
+        self.assertEqual(
+            response.data["count"],
+            len(self.titles("?section=b")),
+        )
+
+    def test_taxonomy_endpoint_lists_every_axis(self):
         response = self.client.get(reverse("taxonomy"))
         self.assertEqual(response.status_code, 200)
         categories = {item["slug"] for item in response.data["categories"]}
@@ -874,6 +927,10 @@ class TaxonomyFilterTests(TestCase):
         self.assertEqual(
             [item["slug"] for item in response.data["year_levels"]],
             ["all", "1", "2", "3", "4"],
+        )
+        self.assertEqual(
+            [item["slug"] for item in response.data["sections"]],
+            ["all", "a", "b", "c", "d"],
         )
 
     def test_the_editor_rejects_a_category_that_is_not_ours(self):

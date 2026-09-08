@@ -16,7 +16,7 @@ backend/    Django 5 + DRF, deploys to Railway
 
 | | |
 |---|---|
-| **Home** (`/`) | Every published announcement, newest first, with search and pagination |
+| **Home** (`/`) | Every published announcement, newest first, with search, filters and pagination |
 | **Announcement** (`/a/exam-schedule`) | Server-rendered page with body, photo gallery, and file downloads |
 | **Admin** (`/admin`) | Modal-driven dashboard — create, edit, publish/unpublish, upload, delete |
 
@@ -226,6 +226,10 @@ sent - fine locally, and the startup checks warn if it happens in production.
    - **Year level** — a specific year, or All year levels. A post for "all"
      stays visible whichever year a reader filters to, so a campus-wide class
      suspension is never hidden from anyone.
+   - **Section** — A, B, C, D, or All sections. Same rule again: a post for
+     all sections stays visible whichever section a reader filters to, so only
+     the posts meant for *another* section are hidden. Year and section show
+     together on the card as one tag — "4A".
    - **Re-posted from** — which page it came from (optional).
    - **Link to the original post** — the Facebook post URL (optional).
    - **Poster and attachments** — **Make a poster** draws one from a template
@@ -314,6 +318,33 @@ link. Continuation pages carry the banner and a "continued" marker at the top
 and a page number at the foot, so an image forwarded on its own still makes
 sense. The type is only reduced when a small reduction saves a whole extra
 image. The editor previews every page and says how many there will be.
+
+### Filing a post for one class
+
+Announcements are filed on three independent axes: **category** (what it is
+about), **year level**, and **section**. Readers filter by any of them, on the
+home page and in the dashboard.
+
+The rule for the last two is the same, and it is the important one: filtering
+to 4th year, Section A shows the posts for 4A **plus** everything addressed to
+the whole year, the whole school, or every section. Only the posts meant for a
+*different* class are hidden, so a campus-wide suspension can never disappear
+because someone left a filter on.
+
+Posts made before sections existed are filed as "all sections". To set a batch
+of them at once — say everything so far was for 4A, except one general notice:
+
+```powershell
+cd backend
+.venv\Scripts\Activate.ps1
+python manage.py set_audience --year 4 --section a --exclude notice
+```
+
+That prints what it would change and saves nothing. Add `--apply` to write it.
+`--exclude TEXT` skips posts whose title contains TEXT, `--only TEXT` limits it
+to those that do, and both can be repeated. On Railway, run it with
+`railway run python manage.py set_audience ...` so it reaches the deployed
+database rather than your local one.
 
 ### Re-posting from the SLC Facebook pages
 
@@ -585,8 +616,9 @@ backend/
     storage.py         Cloudinary upload/delete, local-disk dev fallback
     throttles.py       upload rate limit
     exceptions.py      uniform { detail, errors } error envelope
-    tests.py           22 tests
+    tests.py           125 tests
     management/commands/ensure_admin.py
+    management/commands/set_audience.py  bulk-set year/section on old posts
   Dockerfile           same image for Root Directory = backend
   railway.json         healthcheck + pre-deploy migrations
   build.sh             Render build: install, collectstatic, migrate, ensure_admin

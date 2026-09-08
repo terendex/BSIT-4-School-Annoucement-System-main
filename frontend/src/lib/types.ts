@@ -31,9 +31,13 @@ export interface YearLevel {
   short: string;
 }
 
+/** Sections carry the same shape as year levels: slug, full name, short. */
+export type Section = YearLevel;
+
 export interface Taxonomy {
   categories: Category[];
   year_levels: YearLevel[];
+  sections: Section[];
 }
 
 export interface AnnouncementSummary {
@@ -46,6 +50,10 @@ export interface AnnouncementSummary {
   category_name: string;
   year_level: string;
   year_level_name: string;
+  section: string;
+  section_name: string;
+  /** Year and section as one label - "4A" - or empty when it is for everybody. */
+  audience_name: string;
   author: number | null;
   author_name: string;
   cover_image: Attachment | null;

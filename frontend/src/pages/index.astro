@@ -8,8 +8,9 @@ const page = Math.max(1, Number(Astro.url.searchParams.get("page") ?? "1") || 1)
 const search = (Astro.url.searchParams.get("q") ?? "").trim();
 const category = (Astro.url.searchParams.get("category") ?? "").trim();
 const year = (Astro.url.searchParams.get("year") ?? "").trim();
+const section = (Astro.url.searchParams.get("section") ?? "").trim();
 
-const filters = { search, category, year };
+const filters = { search, category, year, section };
 const [data, taxonomy, feedState] = await Promise.all([
   listAnnouncements(page, filters),
   getTaxonomy(),
@@ -29,6 +30,7 @@ const refreshParams = new URLSearchParams();
 if (search) refreshParams.set("q", search);
 if (category) refreshParams.set("category", category);
 if (year) refreshParams.set("year", year);
+if (section) refreshParams.set("section", section);
 const refreshQuery = refreshParams.toString();
 
 const hasPrev = Boolean(data.previous);
@@ -44,7 +46,17 @@ const pageHref = (target: number) => {
 
 const activeCategory = taxonomy.categories.find((item) => item.slug === category);
 const activeYear = taxonomy.year_levels.find((item) => item.slug === year);
-const isFiltered = Boolean(search || category || year);
+const activeSection = taxonomy.sections.find((item) => item.slug === section);
+const isFiltered = Boolean(search || category || year || section);
+
+// Who the list has been narrowed to, if anyone: "4th year", "Section A", or
+// both. Used in the summary line under the filter bar.
+const narrowedTo = [
+  activeYear && activeYear.slug !== "all" ? activeYear.name : "",
+  activeSection && activeSection.slug !== "all" ? activeSection.name : "",
+]
+  .filter(Boolean)
+  .join(", ");
 ---
 
 <BaseLayout
@@ -109,6 +121,22 @@ const isFiltered = Boolean(search || category || year);
       </select>
     </div>
 
+    <div class="filterbar__field">
+      <label class="filterbar__label" for="filter-section">Section</label>
+      <select class="select" id="filter-section" name="section">
+        {
+          taxonomy.sections.map((item) => {
+            const value = item.slug === "all" ? "" : item.slug;
+            return (
+              <option value={value} selected={section === value}>
+                {item.name}
+              </option>
+            );
+          })
+        }
+      </select>
+    </div>
+
     <div class="filterbar__actions">
       <button class="btn" type="submit">Apply</button>
       {
@@ -125,9 +153,7 @@ const isFiltered = Boolean(search || category || year);
     isFiltered && data.results.length > 0 && (
       <p class="filters__summary">
         Showing {activeCategory ? activeCategory.name.toLowerCase() : "all"} announcements
-        {activeYear && activeYear.slug !== "all"
-          ? ` for ${activeYear.name}, plus those for everyone`
-          : ""}
+        {narrowedTo ? ` for ${narrowedTo}, plus those for everyone` : ""}
         {search ? ` matching "${search}"` : ""}.
       </p>
     )

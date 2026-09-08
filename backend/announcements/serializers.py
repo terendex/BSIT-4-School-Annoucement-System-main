@@ -6,7 +6,7 @@ from rest_framework import serializers
 
 from .models import Announcement, Attachment, profile_for, unique_slug
 from .sources import SOURCE_PAGE_SLUGS
-from .taxonomy import CATEGORY_SLUGS, YEAR_LEVEL_SLUGS
+from .taxonomy import CATEGORY_SLUGS, SECTION_SLUGS, YEAR_LEVEL_SLUGS
 
 User = get_user_model()
 
@@ -50,6 +50,8 @@ class AnnouncementListSerializer(serializers.ModelSerializer):
     source_page_name = serializers.CharField(read_only=True)
     category_name = serializers.CharField(read_only=True)
     year_level_name = serializers.CharField(read_only=True)
+    section_name = serializers.CharField(read_only=True)
+    audience_name = serializers.CharField(read_only=True)
     author_name = serializers.SerializerMethodField()
     cover_image = serializers.SerializerMethodField()
     image_count = serializers.SerializerMethodField()
@@ -67,6 +69,9 @@ class AnnouncementListSerializer(serializers.ModelSerializer):
             "category_name",
             "year_level",
             "year_level_name",
+            "section",
+            "section_name",
+            "audience_name",
             "author",
             "author_name",
             "cover_image",
@@ -134,6 +139,7 @@ class AnnouncementWriteSerializer(serializers.ModelSerializer):
             "published",
             "category",
             "year_level",
+            "section",
             "source_page",
             "source_url",
             "created_at",
@@ -151,6 +157,12 @@ class AnnouncementWriteSerializer(serializers.ModelSerializer):
         value = (value or "").strip()
         if value and value not in YEAR_LEVEL_SLUGS:
             raise serializers.ValidationError("Not one of the year levels.")
+        return value
+
+    def validate_section(self, value):
+        value = (value or "").strip()
+        if value and value not in SECTION_SLUGS:
+            raise serializers.ValidationError("Not one of the sections.")
         return value
 
     def validate_source_page(self, value):

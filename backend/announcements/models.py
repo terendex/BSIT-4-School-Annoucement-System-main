@@ -13,6 +13,10 @@ from .taxonomy import (
     YEAR_LEVEL_CHOICES,
     category_name,
     year_level_name,
+    section_name,
+    audience_name,
+    DEFAULT_SECTION,
+    SECTION_CHOICES,
 )
 
 SLUG_MAX_LENGTH = 80
@@ -97,6 +101,16 @@ class AnnouncementQuerySet(models.QuerySet):
             return self
         return self.filter(year_level__in=[slug, DEFAULT_YEAR_LEVEL])
 
+    def for_section(self, slug):
+        """Posts for one section, plus the ones for every section.
+
+        The same rule as the year above it: filtering to A must not hide a
+        notice addressed to the whole year, only the ones meant for B, C or D.
+        """
+        if not slug or slug == DEFAULT_SECTION:
+            return self
+        return self.filter(section__in=[slug, DEFAULT_SECTION])
+
 
 class Announcement(models.Model):
     title = models.CharField(max_length=200)
@@ -115,6 +129,13 @@ class Announcement(models.Model):
         max_length=10,
         choices=YEAR_LEVEL_CHOICES,
         default=DEFAULT_YEAR_LEVEL,
+        db_index=True,
+    )
+    # Which section within that year, or "all" for every section of it.
+    section = models.CharField(
+        max_length=10,
+        choices=SECTION_CHOICES,
+        default=DEFAULT_SECTION,
         db_index=True,
     )
     author = models.ForeignKey(
@@ -169,6 +190,15 @@ class Announcement(models.Model):
     @property
     def year_level_name(self) -> str:
         return year_level_name(self.year_level)
+
+    @property
+    def section_name(self) -> str:
+        return section_name(self.section)
+
+    @property
+    def audience_name(self) -> str:
+        """Year and section as one label - "4A" - for a card's tag."""
+        return audience_name(self.year_level, self.section)
 
     @property
     def cover_image(self):

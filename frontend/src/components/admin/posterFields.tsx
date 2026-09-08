@@ -10,7 +10,7 @@
  * and it is a set of rows.
  */
 
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import {
   parseSchedule,
   parseSections,
@@ -82,6 +82,44 @@ const FALLBACK_HEAD = ["Subject", "Day", "Time", "Room"];
 
 /** The bar separates columns, so it cannot also sit inside one. */
 const cleanCell = (text: string) => text.replace(/[|\r\n]/g, " ");
+
+/**
+ * A textarea that is exactly as tall as what is in it.
+ *
+ * A points box fixed at four rows scrolls as soon as a subject has five
+ * reminders, which hides the lines above and below the one being typed - the
+ * writer cannot see the list they are building. Growing with the content
+ * costs a little height and shows the whole thing.
+ */
+function GrowingTextarea({
+  value,
+  minRows = 3,
+  ...rest
+}: React.TextareaHTMLAttributes<HTMLTextAreaElement> & { minRows?: number }) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+
+  useLayoutEffect(() => {
+    const element = ref.current;
+    if (!element) return;
+    // Measured from nothing, so it shrinks back when lines are deleted.
+    element.style.height = "auto";
+    // scrollHeight covers the content and padding but not the border, and
+    // these boxes are border-box - setting it straight leaves them a border
+    // short, which is just enough to keep the last line scrolling.
+    const border = element.offsetHeight - element.clientHeight;
+    element.style.height = `${element.scrollHeight + border}px`;
+  }, [value]);
+
+  return (
+    <textarea
+      {...rest}
+      ref={ref}
+      value={value}
+      rows={minRows}
+      style={{ overflowY: "hidden", resize: "none", ...rest.style }}
+    />
+  );
+}
 
 function RawToggle({
   raw,
@@ -311,13 +349,13 @@ export function SectionsField({ field, value, disabled, onChange }: FieldProps) 
                 </button>
               </div>
 
-              <textarea
+              <GrowingTextarea
                 className="textarea poster__textarea"
                 value={group.body}
                 placeholder="One point per line. Indent a line to nest it."
                 onChange={(event) => replace(index, { ...group, body: event.target.value })}
                 disabled={disabled}
-                rows={4}
+                minRows={2}
                 aria-label={`Points for ${group.heading || `subject ${index + 1}`}`}
               />
             </div>

@@ -36,6 +36,7 @@ export interface FeedFilters {
   search?: string;
   category?: string;
   year?: string;
+  section?: string;
 }
 
 export async function listAnnouncements(
@@ -46,6 +47,7 @@ export async function listAnnouncements(
   if (filters.search) params.set("q", filters.search);
   if (filters.category) params.set("category", filters.category);
   if (filters.year) params.set("year", filters.year);
+  if (filters.section) params.set("section", filters.section);
   const data = await getJson<Paginated<AnnouncementSummary>>(
     `/api/announcements/?${params}`
   );
@@ -71,15 +73,27 @@ export async function getFeedState(filters: FeedFilters = {}): Promise<FeedState
   if (filters.search) params.set("q", filters.search);
   if (filters.category) params.set("category", filters.category);
   if (filters.year) params.set("year", filters.year);
+  if (filters.section) params.set("section", filters.section);
   const query = params.toString();
   const data = await getJson<FeedState>(`/api/feed-state/${query ? `?${query}` : ""}`);
   return data ?? { count: 0, last_modified: null };
 }
 
-/** The filter vocabulary. Empty lists simply hide the filter bar. */
+/**
+ * The filter vocabulary. Empty lists simply hide the filter bar.
+ *
+ * Each axis is defaulted separately rather than the whole object at once: the
+ * frontend and the API deploy independently, so a page can be live against an
+ * API that predates one of them. A missing list should cost that one filter,
+ * not throw on the first `.map` and take the page with it.
+ */
 export async function getTaxonomy(): Promise<Taxonomy> {
   const data = await getJson<Taxonomy>("/api/taxonomy/");
-  return data ?? { categories: [], year_levels: [] };
+  return {
+    categories: data?.categories ?? [],
+    year_levels: data?.year_levels ?? [],
+    sections: data?.sections ?? [],
+  };
 }
 
 export async function getAnnouncement(slug: string): Promise<Announcement | null> {

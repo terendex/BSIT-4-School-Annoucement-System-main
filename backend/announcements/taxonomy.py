@@ -116,10 +116,10 @@ def section_name(slug: str) -> str:
 
 
 def audience_name(year_level: str, section: str) -> str:
-    """How the two together read on a card: "4th year - Section A", or "4A".
+    """Who a post is for, as one label: "4A", "4th year", or "Section A".
 
-    Returns an empty string when a post is for everybody, so a card can leave
-    the tag off entirely rather than showing "All year levels, all sections".
+    Returns an empty string when it is for everybody, so a card leaves the tag
+    off rather than reading "All year levels, all sections".
     """
     year = YEAR_LEVEL_BY_SLUG.get(year_level)
     part = SECTION_BY_SLUG.get(section)
@@ -127,8 +127,9 @@ def audience_name(year_level: str, section: str) -> str:
     has_section = part is not None and section != DEFAULT_SECTION
 
     if has_year and has_section:
-        # "4th year" + "A" reads as 4A, which is what everyone calls it.
-        return f"{year['short']} {part['short']}".replace("th yr ", "").strip() or year["name"]
+        # The year slugs are the bare digits, so this reads "4A" - what
+        # everybody actually calls it - rather than "4th year, Section A".
+        return f"{year_level}{part['short']}"
     if has_year:
         return year["name"]
     if has_section:

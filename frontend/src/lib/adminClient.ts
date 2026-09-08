@@ -219,6 +219,7 @@ export interface AdminListFilters {
   search?: string;
   category?: string;
   year?: string;
+  section?: string;
   mine?: boolean;
 }
 
@@ -227,6 +228,7 @@ export function listAll(page = 1, filters: AdminListFilters = {}) {
   if (filters.search) params.set("q", filters.search);
   if (filters.category) params.set("category", filters.category);
   if (filters.year) params.set("year", filters.year);
+  if (filters.section) params.set("section", filters.section);
   if (filters.mine) params.set("mine", "true");
   return request<Paginated<Announcement>>(`/api/admin/announcements/?${params}`);
 }
@@ -237,6 +239,7 @@ export interface AnnouncementInput {
   published: boolean;
   category?: string;
   year_level?: string;
+  section?: string;
   slug?: string;
   source_page?: string;
   source_url?: string;
@@ -298,16 +301,23 @@ export const updateAttachment = (id: number, data: { caption?: string; order?: n
 // --------------------------------------------------------------------------
 // Taxonomy
 // --------------------------------------------------------------------------
-const EMPTY_TAXONOMY: Taxonomy = { categories: [], year_levels: [] };
+const EMPTY_TAXONOMY: Taxonomy = { categories: [], year_levels: [], sections: [] };
 
-/** Categories and year levels, so labels live in one place - the API. */
+/** Categories, year levels and sections, so labels live in one place - the API. */
 export async function fetchTaxonomy(): Promise<Taxonomy> {
   try {
     const response = await fetch(`${API_BASE_URL}/api/taxonomy/`, {
       headers: { Accept: "application/json" },
     });
     if (!response.ok) return EMPTY_TAXONOMY;
-    return (await response.json()) as Taxonomy;
+    // Defaulted per axis: the dashboard and the API deploy separately, and a
+    // list this build knows about may not be in an older API's answer yet.
+    const data = (await response.json()) as Partial<Taxonomy> | null;
+    return {
+      categories: data?.categories ?? [],
+      year_levels: data?.year_levels ?? [],
+      sections: data?.sections ?? [],
+    };
   } catch {
     return EMPTY_TAXONOMY;
   }

@@ -36,7 +36,7 @@ from .serializers import (
 )
 from .sources import SOURCE_PAGES
 from .storage import delete_attachment, upload_attachment
-from .taxonomy import CATEGORIES, YEAR_LEVELS
+from .taxonomy import CATEGORIES, SECTIONS, YEAR_LEVELS
 from .throttles import UploadRateThrottle
 from .validators import validate_upload
 
@@ -274,6 +274,7 @@ class PublicAnnouncementListView(generics.ListAPIView):
             .with_attachments()
             .in_category((params.get("category") or "").strip())
             .for_year_level((params.get("year") or "").strip())
+            .for_section((params.get("section") or "").strip())
             .order_by("-created_at", "-id")
         )
         search = (params.get("q") or "").strip()
@@ -318,6 +319,7 @@ class FeedStateView(APIView):
             Announcement.objects.published()
             .in_category((params.get("category") or "").strip())
             .for_year_level((params.get("year") or "").strip())
+            .for_section((params.get("section") or "").strip())
         )
         search = (params.get("q") or "").strip()
         if search:
@@ -363,7 +365,9 @@ class TaxonomyView(APIView):
     throttle_scope = "public"
 
     def get(self, request):
-        return Response({"categories": CATEGORIES, "year_levels": YEAR_LEVELS})
+        return Response(
+            {"categories": CATEGORIES, "year_levels": YEAR_LEVELS, "sections": SECTIONS}
+        )
 
 
 # --------------------------------------------------------------------------
@@ -388,6 +392,7 @@ class AdminAnnouncementViewSet(viewsets.ModelViewSet):
             .select_related("author__profile")
             .in_category((params.get("category") or "").strip())
             .for_year_level((params.get("year") or "").strip())
+            .for_section((params.get("section") or "").strip())
             .order_by("-created_at", "-id")
         )
         published = params.get("published")

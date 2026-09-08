@@ -44,6 +44,7 @@ export default function AnnouncementModal({
   const [published, setPublished] = useState(announcement?.published ?? true);
   const [category, setCategory] = useState(announcement?.category ?? "general");
   const [yearLevel, setYearLevel] = useState(announcement?.year_level ?? "all");
+  const [section, setSection] = useState(announcement?.section ?? "all");
   const [sourcePage, setSourcePage] = useState(announcement?.source_page ?? "");
   const [sourceUrl, setSourceUrl] = useState(announcement?.source_url ?? "");
   const [pages, setPages] = useState<SourcePage[]>([]);
@@ -75,6 +76,7 @@ export default function AnnouncementModal({
             published,
             category,
             year_level: yearLevel,
+            section,
             source_page: sourcePage,
             source_url: sourceUrl,
             // Only send the slug when it actually changed; the link should stay put.
@@ -86,6 +88,7 @@ export default function AnnouncementModal({
             published,
             category,
             year_level: yearLevel,
+            section,
             source_page: sourcePage,
             source_url: sourceUrl,
             ...(slug ? { slug } : {}),
@@ -238,6 +241,28 @@ export default function AnnouncementModal({
             </span>
             {fieldError("year_level") && (
               <span className="field__error">{fieldError("year_level")}</span>
+            )}
+          </div>
+
+          <div className="field">
+            <span className="field__label">Section</span>
+            <select
+              className="select"
+              value={section}
+              onChange={(event) => setSection(event.target.value)}
+            >
+              {taxonomy.sections.map((item) => (
+                <option key={item.slug} value={item.slug}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+            <span className="field__hint">
+              Leave this on all sections unless the post is only for one of them.
+              A 4th year, section A post is filed as 4A.
+            </span>
+            {fieldError("section") && (
+              <span className="field__error">{fieldError("section")}</span>
             )}
           </div>
         </div>

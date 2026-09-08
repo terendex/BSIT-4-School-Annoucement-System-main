@@ -27,8 +27,10 @@ const posted = formatDateTime(announcement.published_at ?? announcement.created_
     <div class="card__body">
       <div class="card__badges">
         <span class={`tag tag--${tone}`}>{announcement.category_name}</span>
-        {announcement.year_level !== "all" && (
-          <span class="tag">{announcement.year_level_name}</span>
+        {/* Year and section as one tag - "4A" - rather than two beside each
+            other. Empty when the post is for everybody. */}
+        {announcement.audience_name && (
+          <span class="tag">{announcement.audience_name}</span>
         )}
       </div>
       <h2 class="card__title">{announcement.title}</h2>
