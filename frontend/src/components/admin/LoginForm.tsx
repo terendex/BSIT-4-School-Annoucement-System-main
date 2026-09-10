@@ -10,7 +10,7 @@ import { EyeIcon, EyeOffIcon, WarningIcon } from "./icons";
  * arrive here from a link in an invite email, and a dialog floating over a
  * dimmed dashboard is a strange thing to land on from your inbox.
  *
- * The seal and the school name sit at the top on purpose - someone following a
+ * The logo and the school name sit at the top on purpose - someone following a
  * link from an email should be able to tell at a glance that they are typing
  * their password into the right site.
  */
@@ -45,7 +45,7 @@ export default function LoginForm() {
     <div className="auth">
       <div className="auth__panel">
         <div className="auth__brand">
-          <img className="auth__seal" src={LOGO_PATH} alt="" width="46" height="46" />
+          <img className="auth__logo" src={LOGO_PATH} alt="" width="46" height="46" />
           <p className="auth__site">{SITE_NAME}</p>
         </div>
 

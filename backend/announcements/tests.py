@@ -8,6 +8,7 @@ from unittest import mock
 
 import dj_database_url
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from django.core import checks, mail
@@ -1324,3 +1325,173 @@ class ConsoleBackendIsNotDeliveryTests(RoleTestCase):
         self.assertFalse(response.data["invite_email_sent"])
         self.assertIn("not configured", response.data["detail"])
         self.assertIn("/invite/", response.data["invite_url"])
+
+
+# --------------------------------------------------------------------------
+# Announcement notifications
+# --------------------------------------------------------------------------
+@override_settings(EMAIL_BACKEND=LOCMEM_EMAIL, ANNOUNCEMENT_EMAILS=True)
+class AnnouncementEmailTests(RoleTestCase):
+    """Everyone with an account is told when something is posted."""
+
+    def post_announcement(self, **overrides):
+        payload = {
+            "title": "Midterm schedule",
+            "body": "Exams start on Monday.",
+            "published": True,
+            "category": "exam",
+            "year_level": "4",
+            "section": "a",
+        }
+        payload.update(overrides)
+        return self.client.post(
+            reverse("admin-announcement-list"), payload, format="json"
+        )
+
+    def test_publishing_emails_every_account(self):
+        self.as_user("admin", ADMIN_PASSWORD)
+        response = self.post_announcement()
+        self.assertEqual(response.status_code, 201, response.data)
+
+        self.assertEqual(len(mail.outbox), 1)
+        message = mail.outbox[0]
+        self.assertIn("Midterm schedule", message.subject)
+        self.assertIn("New announcement", message.subject)
+        # Both accounts, and in Bcc rather than To - one publisher must not
+        # learn the address of every other from a routine notice.
+        self.assertEqual(
+            sorted(message.bcc), ["admin@slc.test", "juan@gmail.test"]
+        )
+        self.assertNotIn("juan@gmail.test", message.to)
+
+    def test_email_carries_the_link_and_the_excerpt(self):
+        self.as_user("admin", ADMIN_PASSWORD)
+        response = self.post_announcement()
+        slug = response.data["slug"]
+
+        message = mail.outbox[0]
+        link = "{}/a/{}".format(settings.FRONTEND_ORIGIN, slug)
+        self.assertIn(link, message.body)
+        self.assertIn("Exams start on Monday.", message.body)
+        html = message.alternatives[0][0]
+        self.assertIn(link, html)
+        self.assertIn("Exams start on Monday.", html)
+
+    def test_a_draft_is_not_announced(self):
+        self.as_user("admin", ADMIN_PASSWORD)
+        response = self.post_announcement(published=False)
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(mail.outbox, [])
+
+    def test_publishing_a_draft_later_announces_it_as_new(self):
+        self.as_user("admin", ADMIN_PASSWORD)
+        created = self.post_announcement(published=False)
+        self.assertEqual(mail.outbox, [])
+
+        response = self.client.patch(
+            reverse("admin-announcement-detail", args=[created.data["id"]]),
+            {"published": True},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn("New announcement", mail.outbox[0].subject)
+
+    def test_editing_the_wording_sends_an_update(self):
+        self.as_user("admin", ADMIN_PASSWORD)
+        created = self.post_announcement()
+        mail.outbox = []
+
+        response = self.client.patch(
+            reverse("admin-announcement-detail", args=[created.data["id"]]),
+            {"body": "Exams start on Tuesday, not Monday."},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn("Updated announcement", mail.outbox[0].subject)
+        self.assertIn("Tuesday", mail.outbox[0].body)
+
+    def test_a_save_that_changes_nothing_sends_nothing(self):
+        # The dashboard PATCHes the whole form on every save, so an author who
+        # opens a post and presses Save without typing must not mail everyone.
+        self.as_user("admin", ADMIN_PASSWORD)
+        created = self.post_announcement()
+        mail.outbox = []
+
+        response = self.client.patch(
+            reverse("admin-announcement-detail", args=[created.data["id"]]),
+            {"title": "Midterm schedule", "body": "Exams start on Monday."},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(mail.outbox, [])
+
+    def test_unpublishing_sends_nothing(self):
+        self.as_user("admin", ADMIN_PASSWORD)
+        created = self.post_announcement()
+        mail.outbox = []
+
+        response = self.client.patch(
+            reverse("admin-announcement-detail", args=[created.data["id"]]),
+            {"published": False},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(mail.outbox, [])
+
+    def test_inactive_accounts_are_not_mailed(self):
+        self.publisher.is_active = False
+        self.publisher.save(update_fields=["is_active"])
+
+        self.as_user("admin", ADMIN_PASSWORD)
+        self.post_announcement()
+        self.assertEqual(mail.outbox[0].bcc, ["admin@slc.test"])
+
+    def test_one_address_on_two_accounts_gets_one_copy(self):
+        User.objects.create_user(
+            username="duplicate", email="Juan@Gmail.test", password=PUBLISHER_PASSWORD
+        )
+        self.as_user("admin", ADMIN_PASSWORD)
+        self.post_announcement()
+        self.assertEqual(len(mail.outbox[0].bcc), 2)
+
+    @override_settings(ANNOUNCEMENT_EMAILS=False)
+    def test_the_switch_stops_the_notification(self):
+        self.as_user("admin", ADMIN_PASSWORD)
+        response = self.post_announcement()
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(mail.outbox, [])
+
+    def test_a_failing_mail_server_still_publishes(self):
+        # The post is saved and on the site before any of this runs. Turning a
+        # mail failure into a failed request would tell the publisher their
+        # announcement did not go up, which is simply untrue.
+        self.as_user("admin", ADMIN_PASSWORD)
+        with mock.patch(
+            "announcements.emails.EmailMultiAlternatives.send",
+            side_effect=OSError("Network is unreachable"),
+        ):
+            with self.assertLogs("announcements.emails", level="ERROR"):
+                response = self.post_announcement()
+
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertTrue(Announcement.objects.filter(slug=response.data["slug"]).exists())
+
+
+@override_settings(
+    EMAIL_BACKEND="django.core.mail.backends.console.EmailBackend",
+    ANNOUNCEMENT_EMAILS=True,
+)
+class AnnouncementEmailNotConfiguredTests(RoleTestCase):
+    def test_publishing_still_works_with_no_mail_configured(self):
+        self.as_user("admin", ADMIN_PASSWORD)
+        with self.assertLogs("announcements.emails", level="WARNING") as captured:
+            response = self.client.post(
+                reverse("admin-announcement-list"),
+                {"title": "Class suspended", "body": "No classes today.",
+                 "published": True},
+                format="json",
+            )
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertIn("not configured", "\n".join(captured.output))

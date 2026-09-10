@@ -5,27 +5,27 @@
  * numbers, so a poster made for a suspension and one made for a meeting come
  * out of the same design - the only difference between them is the words.
  *
- * The palette is the school's, copied from global.css so a poster sitting in
+ * The palette is the Terendex logo's, copied from global.css so a poster sitting in
  * the feed next to the site chrome reads as the same publication.
  */
 
-export const NAVY = "#1b2560";
-export const NAVY_DEEP = "#10173d";
-export const INK = "#14172b";
-export const MUTED = "#4a5378";
+export const PURPLE = "#4c2a7b";
+export const PURPLE_DEEP = "#23103d";
+export const INK = "#1e142b";
+export const MUTED = "#6a5a80";
 export const PAPER = "#ffffff";
-export const BAND = "#eef0f7";
-export const LINE = "#d7dbea";
+export const BAND = "#f2eef7";
+export const LINE = "#dfd7ea";
 export const GOLD = "#c9a227";
 
 /** Tone modifiers, mirroring the taxonomy's `tone` field on each category. */
 export const TONES: Record<string, string> = {
   danger: "#8f1d16",
   success: "#14603a",
-  info: "#1b2560",
+  info: "#5b1f8f",
   warning: "#8a6410",
-  accent: "#4a2a7a",
-  neutral: NAVY,
+  accent: "#8c306a",
+  neutral: PURPLE,
 };
 
 /**
@@ -47,7 +47,7 @@ export const MARGIN_X = 74;
 export const MARGIN_TOP = 40;
 export const MARGIN_BOTTOM = 48;
 
-/** The navy rules that frame the top and bottom edge of every poster. */
+/** The purple rules that frame the top and bottom edge of every poster. */
 export const FRAME_TOP = 14;
 export const FRAME_BOTTOM = 18;
 

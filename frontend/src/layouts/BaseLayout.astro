@@ -15,7 +15,7 @@ import "../styles/global.css";
 interface Props {
   title: string;
   description?: string;
-  /** Absolute or site-relative image URL. Falls back to the school seal. */
+  /** Absolute or site-relative image URL. Falls back to the Terendex logo. */
   image?: string | null;
   imageAlt?: string;
   /** Pixel size of `image`. Messenger needs these to draw the large card. */
@@ -57,7 +57,7 @@ const {
 const pageTitle = title === SITE_NAME ? title : `${title} | ${SITE_NAME}`;
 const canonical = absoluteUrl(canonicalPath);
 // The announcement's first photo, padded to the card's shape so nothing is
-// cropped; otherwise the seal on a ready-made 1200x630 canvas. Either way
+// cropped; otherwise the logo on a ready-made 1200x630 canvas. Either way
 // Messenger gets a picture it will not slice.
 const preview = image
   ? ogImageFor(absoluteUrl(image), imageWidth ?? null, imageHeight ?? null, imageType ?? null)
@@ -86,11 +86,11 @@ const ogDescription = description.length > 200 ? `${description.slice(0, 197)}..
     <title>{pageTitle}</title>
     <meta name="description" content={ogDescription} />
     <link rel="canonical" href={canonical} />
-    <!-- Tab icon is the seal's crest alone; the full seal is illegible at 16px. -->
+    <!-- Tab icon is the mark itself, sharpened - its wings smudge at 16px otherwise. -->
     <link rel="icon" href="/favicon.ico" sizes="any" />
     <link rel="icon" href="/favicon-32.png" type="image/png" sizes="32x32" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-    <meta name="theme-color" content="#1f2a6b" />
+    <meta name="theme-color" content="#4c2a7b" />
     {noindex && <meta name="robots" content="noindex, nofollow" />}
 
     <!-- Open Graph: what Facebook Messenger reads for the link preview. -->

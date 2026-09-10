@@ -573,7 +573,7 @@ function ShareModal({
       )}
       {announcement.image_count === 0 && (
         <p className="field__hint" style={{ marginTop: "12px" }}>
-          No photo attached, so Messenger will use the school seal as the preview image.
+          No photo attached, so Messenger will use the Terendex logo as the preview image.
         </p>
       )}
 

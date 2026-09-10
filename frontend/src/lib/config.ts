@@ -45,6 +45,22 @@ export const SITE_TAGLINE =
   import.meta.env.PUBLIC_SITE_TAGLINE ||
   "Announcements for BSIT Students - Saint Louis College, City of San Fernando, La Union.";
 
+/**
+ * How the site introduces itself when its own address is shared, rather than
+ * one announcement's.
+ *
+ * The tagline is the line under the logo in the header, where the logo beside
+ * it already says where you are. A link in a chat has none of that context, so
+ * this says what is actually posted here - which is what decides whether
+ * anyone opens it.
+ *
+ * Kept inside the 200 characters Messenger will show; longer is truncated by
+ * BaseLayout anyway.
+ */
+export const SITE_INTRO =
+  import.meta.env.PUBLIC_SITE_INTRO ||
+  "Exam schedules, class suspensions, events and requirements for BSIT students at Saint Louis College, City of San Fernando, La Union - posted the moment they are announced.";
+
 /** Logo lives in /public and doubles as the Open Graph fallback image. */
 export const LOGO_PATH = "/logo.png";
 /** Keep in step with public/logo.png. */
@@ -53,9 +69,21 @@ export const LOGO_HEIGHT = 800;
 
 /**
  * Link-preview image for announcements with no photo. Shaped 1200x630 so
- * Facebook does not crop the seal - see scripts/build_logo.py.
+ * Facebook does not crop the logo - see scripts/build_logo.py.
  */
 export const OG_FALLBACK_PATH = "/og-default.png";
+
+/**
+ * Link-preview image for the site's own address - the logo with the site's
+ * name and what it posts, drawn on the same 1200x630 page the poster maker
+ * uses. The fallback above is deliberately the bare logo instead: it stands in
+ * for one announcement, and introducing the whole site there would say the
+ * wrong thing.
+ *
+ * Also built by scripts/build_logo.py; its wording lives in that script and
+ * must stay in step with SITE_NAME and SITE_INTRO.
+ */
+export const OG_INTRO_PATH = "/og-intro.png";
 
 export const absoluteUrl = (path: string) =>
   path.startsWith("http") ? path : `${SITE_URL}${path.startsWith("/") ? path : `/${path}`}`;

@@ -153,7 +153,7 @@ export default function ChangePasswordForm({ user, forced, onChanged, onCancel }
     <div className="auth">
       <div className="auth__panel">
         <div className="auth__brand">
-          <img className="auth__seal" src={LOGO_PATH} alt="" width="46" height="46" />
+          <img className="auth__logo" src={LOGO_PATH} alt="" width="46" height="46" />
           <p className="auth__site">{SITE_NAME}</p>
         </div>
 

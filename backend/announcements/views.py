@@ -14,7 +14,7 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenRefreshView
 
-from .emails import send_invite_email
+from .emails import send_announcement_email, send_invite_email
 from .models import Announcement, Attachment, Profile, profile_for
 from .pagination import StandardPagination
 from .passwords import generate_invite_token, hash_invite_token, tokens_match
@@ -373,6 +373,32 @@ class TaxonomyView(APIView):
 # --------------------------------------------------------------------------
 # Admin (JWT protected)
 # --------------------------------------------------------------------------
+# The fields whose wording is what people were told. An edit to any of these
+# is worth a second email; reordering photos or fixing a source link is not.
+NOTIFIABLE_FIELDS = ("title", "body", "category", "year_level", "section")
+
+
+def announcement_content(announcement):
+    """The part of a post an edit email would actually be about."""
+    return tuple(getattr(announcement, field) for field in NOTIFIABLE_FIELDS)
+
+
+def notify_about(announcement, *, updated):
+    """Mail everyone with an account, without letting that affect the save.
+
+    Publishing has already happened by the time this runs and the post is
+    already on the site, so anything going wrong here is logged and dropped
+    rather than turned into a failed request. The publisher would otherwise see
+    "could not save" for a post that saved perfectly well.
+    """
+    if not getattr(settings, "ANNOUNCEMENT_EMAILS", True):
+        return
+    try:
+        send_announcement_email(announcement, updated=updated)
+    except Exception:  # pragma: no cover - send_announcement_email catches its own
+        logger.exception("Announcement email for %s raised", announcement.slug)
+
+
 class AdminAnnouncementViewSet(viewsets.ModelViewSet):
     """The dashboard's CRUD, drafts included.
 
@@ -416,6 +442,8 @@ class AdminAnnouncementViewSet(viewsets.ModelViewSet):
         write = AnnouncementWriteSerializer(data=request.data, context=self.get_serializer_context())
         write.is_valid(raise_exception=True)
         announcement = write.save()
+        if announcement.published:
+            notify_about(announcement, updated=False)
         return Response(
             AnnouncementDetailSerializer(announcement, context=self.get_serializer_context()).data,
             status=status.HTTP_201_CREATED,
@@ -424,11 +452,27 @@ class AdminAnnouncementViewSet(viewsets.ModelViewSet):
     def update(self, request, *args, **kwargs):
         partial = kwargs.pop("partial", False)
         instance = self.get_object()
+        # Read before saving: the serializer writes onto this same instance, so
+        # afterwards there is nothing left to compare against.
+        was_published = instance.published
+        was = announcement_content(instance)
+
         write = AnnouncementWriteSerializer(
             instance, data=request.data, partial=partial, context=self.get_serializer_context()
         )
         write.is_valid(raise_exception=True)
         announcement = write.save()
+
+        # A draft going live is news; a post that was already live and had its
+        # wording changed is an update. Everything else - unpublishing, a
+        # reordered gallery, a re-save that changed nothing - is neither, and
+        # mailing the whole staff about it would teach them to ignore these.
+        if announcement.published:
+            if not was_published:
+                notify_about(announcement, updated=False)
+            elif announcement_content(announcement) != was:
+                notify_about(announcement, updated=True)
+
         return Response(
             AnnouncementDetailSerializer(announcement, context=self.get_serializer_context()).data
         )

@@ -106,18 +106,21 @@ def database_is_persistent_in_production(app_configs, **kwargs):
 
 @register()
 def email_configured_in_production(app_configs, **kwargs):
-    """Warn when publisher invites would be printed instead of sent.
+    """Warn when outgoing mail would be printed instead of sent.
 
     Without EMAIL_HOST_USER / EMAIL_HOST_PASSWORD the console backend is used:
     inviting a publisher appears to work, but the temporary password goes to
     the container's log rather than to their inbox, so they can never sign in.
+    Announcement notifications are dropped the same way - posting still works,
+    but nobody is told.
     """
     if settings.DEBUG or settings.EMAIL_ENABLED or _is_non_serving_command():
         return []
     return [
         Warning(
-            "Email is not configured; publisher invites will not be delivered "
-            "and the temporary password will be written to the deploy log.",
+            "Email is not configured; publisher invites and announcement "
+            "notifications will not be delivered, and the invite's temporary "
+            "password will be written to the deploy log.",
             hint=(
                 "Set BREVO_API_KEY to a Brevo API key (xkeysib-...) and "
                 "EMAIL_SENDER to a verified sender address. Most hosts block "

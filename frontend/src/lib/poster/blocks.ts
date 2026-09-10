@@ -21,13 +21,13 @@ export interface Card {
 }
 
 export type Block =
-  /** The filled navy plate a poster is titled with (REMINDERS, NOTICE). */
+  /** The filled purple plate a poster is titled with (REMINDERS, NOTICE). */
   | { kind: "banner"; text: string }
   /** One enormous word or figure - the thing the poster is really about. */
   | { kind: "hero"; text: string }
   /** A large statement line, smaller than a hero but still the focus. */
   | { kind: "headline"; text: string; align?: Align; weight?: number }
-  /** A banded section header with a navy rule, used to group a long poster. */
+  /** a banded section header with a purple rule, used to group a long poster. */
   | { kind: "section"; text: string }
   /** A wrapped paragraph. */
   | {

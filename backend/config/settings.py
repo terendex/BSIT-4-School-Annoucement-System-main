@@ -258,6 +258,11 @@ DEFAULT_FROM_EMAIL = os.getenv(
 # How long a mailed temporary password stays usable.
 INVITE_EXPIRY_DAYS = int(os.getenv("INVITE_EXPIRY_DAYS", "7"))
 
+# Mail everyone with an account when a post goes up or its wording changes.
+# Set ANNOUNCEMENT_EMAILS=false to keep the invites but stop the notifications
+# - during a bulk import, say, where every restored row would mail the staff.
+ANNOUNCEMENT_EMAILS = env_bool("ANNOUNCEMENT_EMAILS", True)
+
 # --------------------------------------------------------------------------
 # Upload limits (also enforced per file in announcements/validators.py)
 # --------------------------------------------------------------------------

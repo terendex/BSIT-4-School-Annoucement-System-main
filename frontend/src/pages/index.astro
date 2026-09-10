@@ -2,7 +2,8 @@
 import BaseLayout from "../layouts/BaseLayout.astro";
 import AnnouncementCard from "../components/AnnouncementCard.astro";
 import { getFeedState, getTaxonomy, listAnnouncements } from "../lib/api";
-import { LOGO_PATH, SITE_NAME, SITE_TAGLINE } from "../lib/config";
+import { OG_HEIGHT, OG_WIDTH } from "../lib/ogImage";
+import { LOGO_PATH, OG_INTRO_PATH, SITE_INTRO, SITE_NAME } from "../lib/config";
 
 const page = Math.max(1, Number(Astro.url.searchParams.get("page") ?? "1") || 1);
 const search = (Astro.url.searchParams.get("q") ?? "").trim();
@@ -59,9 +60,19 @@ const narrowedTo = [
   .join(", ");
 ---
 
+<!--
+  Sharing the site's own address gets the introduction card rather than the
+  bare logo an announcement falls back to - the same 1200x630 page, so
+  Messenger draws it at full width without cropping or padding it.
+-->
 <BaseLayout
   title={SITE_NAME}
-  description={SITE_TAGLINE}
+  description={SITE_INTRO}
+  image={OG_INTRO_PATH}
+  imageAlt={`The Terendex logo beside the name ${SITE_NAME}`}
+  imageWidth={OG_WIDTH}
+  imageHeight={OG_HEIGHT}
+  imageType="image/png"
   canonicalPath="/"
   refreshSignature={refreshSignature}
   refreshQuery={refreshQuery}
