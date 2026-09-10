@@ -931,7 +931,7 @@ class TaxonomyFilterTests(TestCase):
         )
         self.assertEqual(
             [item["slug"] for item in response.data["sections"]],
-            ["all", "a", "b", "c", "d"],
+            ["all", "a", "b", "c", "d", "e"],
         )
 
     def test_the_editor_rejects_a_category_that_is_not_ours(self):

@@ -83,6 +83,7 @@ SECTIONS = [
     {"slug": "b", "name": "Section B", "short": "B"},
     {"slug": "c", "name": "Section C", "short": "C"},
     {"slug": "d", "name": "Section D", "short": "D"},
+    {"slug": "e", "name": "Section E", "short": "E"},
 ]
 
 DEFAULT_SECTION = "all"
